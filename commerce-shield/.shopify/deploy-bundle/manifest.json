@@ -1,0 +1,50 @@
+{
+  "name": "Commerce Shield",
+  "handle": "",
+  "modules": [
+    {
+      "type": "app_access",
+      "handle": "app_access",
+      "uid": "app_access",
+      "assets": "app_access",
+      "target": "",
+      "config": {
+        "scopes": "read_customer_events,read_customers,read_discounts,read_orders,read_products,read_script_tags,read_themes,read_webhook_subscriptions,write_customers,write_discounts,write_orders,write_products,write_script_tags",
+        "redirect_url_allowlist": [
+          "https://commerce-shield.ncassidy.workers.dev/auth/callback"
+        ]
+      }
+    },
+    {
+      "type": "webhooks",
+      "handle": "webhooks",
+      "uid": "webhooks",
+      "assets": "webhooks",
+      "target": "",
+      "config": {
+        "api_version": "2025-10"
+      }
+    },
+    {
+      "type": "app_home",
+      "handle": "app_home",
+      "uid": "app_home",
+      "assets": "app_home",
+      "target": "",
+      "config": {
+        "app_url": "https://commerce-shield.ncassidy.workers.dev/",
+        "embedded": true
+      }
+    },
+    {
+      "type": "branding",
+      "handle": "branding",
+      "uid": "branding",
+      "assets": "branding",
+      "target": "",
+      "config": {
+        "name": "Commerce Shield"
+      }
+    }
+  ]
+}

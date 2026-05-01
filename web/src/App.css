@@ -1,0 +1,9 @@
+/* App-level overrides — kept minimal; see gcw-theme.css for design system */
+.tab-btn:hover {
+  opacity: 0.85;
+}
+
+.tab-btn:disabled {
+  cursor: default;
+  opacity: 1;
+}

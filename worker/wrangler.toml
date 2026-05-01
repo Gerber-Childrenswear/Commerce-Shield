@@ -1,0 +1,13 @@
+name = "commerce-shield"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[vars]
+SHOPIFY_APP_URL = "https://commerce-shield.ncassidy.workers.dev"
+SHOPIFY_ADMIN_SHOP = "gcw-dev.myshopify.com"
+SHOPIFY_ADMIN_API_VERSION = "2026-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "commerce-shield-db"
+database_id = "2f84964f-7a8e-4518-b8c3-d39d3782a5a9"

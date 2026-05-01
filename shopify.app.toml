@@ -1,0 +1,18 @@
+[app]
+name = "Commerce Shield"
+client_id = "dc386b789af148f54d80b54d07e63215"
+application_url = "https://commerce-shield.ncassidy.workers.dev/"
+embedded = true
+
+[access_scopes]
+scopes = "read_products,write_products,read_orders,write_orders,read_discounts,write_discounts,read_script_tags,write_script_tags"
+
+[auth]
+redirect_urls = [
+  "https://commerce-shield.ncassidy.workers.dev/auth/callback"
+]
+
+[webhooks]
+
+[development]
+store = "your-dev-store.myshopify.com"

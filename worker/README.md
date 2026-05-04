@@ -47,6 +47,7 @@ Copy-Item .dev.vars.example .dev.vars
 - `SHOPIFY_ADMIN_SHOP`
 - `SHOPIFY_ADMIN_ACCESS_TOKEN` or `SHOPIFY_ADMIN_ACCESS_TOKENS_JSON`
 - `SHOPIFY_ADMIN_API_VERSION`
+- `COMMERCE_SHIELD_ADMIN_TOKEN`
 - `BLOOMREACH_SHARED_SECRET`
 - `BLOOMREACH_ALLOWED_ORIGINS`
 
@@ -75,6 +76,18 @@ From repository root:
 ```powershell
 npm run worker:deploy
 ```
+
+## Pixel Guard Snippet
+
+Use this script in the Shopify theme/app embed before marketing pixels:
+
+```html
+<script src="https://commerce-shield.ncassidy.workers.dev/cs-pixel-guard.js?shop=gcw-dev.myshopify.com"></script>
+```
+
+The script only suppresses known marketing/analytics pixel calls for high-confidence bot or automation sessions. Normal shoppers and uncertain sessions are left alone.
+
+The embedded admin's **Install Pixel Guard** button installs this script automatically at the beginning of `layout/theme.liquid`'s `<head>`. It requires `COMMERCE_SHIELD_ADMIN_TOKEN` and Shopify `read_themes` / `write_themes` access.
 
 ## Third-Party Dev Checklist
 

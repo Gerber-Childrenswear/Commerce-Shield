@@ -52,6 +52,24 @@ The Worker source of truth now lives in this repo at:
 - `worker/src/index.js` (main entrypoint)
 - `shared/intent-scoring.js` and `shared/worker-security.js` (shared modules)
 
+## Storefront Pixel Suppression
+
+Commerce Shield enforces pixel suppression through the Worker-served storefront guard:
+
+```html
+<script src="https://commerce-shield.ncassidy.workers.dev/cs-pixel-guard.js?shop=gcw-dev.myshopify.com"></script>
+```
+
+Place this as high in the theme `<head>` as possible, before Meta/Google/TikTok/Pinterest/Snap/Bing/Reddit/Cloudflare analytics pixels. The guard fails open for normal shoppers and uncertain sessions. It only suppresses known marketing/analytics pixel calls when the browser is a high-confidence bot or automation session.
+
+The embedded Commerce Shield admin includes an **Install Pixel Guard** button. It reads the main Shopify theme, inserts the guard immediately after the opening `<head>` in `layout/theme.liquid`, and avoids duplicate installs. The Worker must have `COMMERCE_SHIELD_ADMIN_TOKEN` configured, plus a Shopify Admin token with `read_themes` and `write_themes`.
+
+For a dry run that makes no suppression changes, use:
+
+```html
+<script src="https://commerce-shield.ncassidy.workers.dev/cs-pixel-guard.js?shop=gcw-dev.myshopify.com&mode=report"></script>
+```
+
 ### Worker Commands
 
 ```powershell

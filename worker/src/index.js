@@ -30,6 +30,22 @@ const SHOPIFY_THEME_INSTALL_REQUIRED_SCOPES = ["read_themes", "write_themes"];
 const PIXEL_GUARD_MARKER = "Commerce Shield Pixel Guard";
 const INTENT_HIGH_TIERS = new Set(["high_intent", "purchase_ready", "customer"]);
 const INTENT_MEDIUM_TIERS = new Set(["considering", "interested"]);
+const DATACENTER_ASNS = new Set([
+  // Major cloud/datacenter providers frequently used by scraping traffic.
+  14618, 16509, 8075, 15169, 19527, 20473, 396982, 45102,
+  134238, 132203, 38365, 55967, 24940, 34119, 48693, 49815,
+  51167, 53667, 55286, 60781, 62567, 63949, 9009, 35913,
+  40021, 197695, 206728,
+]);
+const DATACENTER_ORG_HINTS = [
+  "amazon", "aws", "google", "gcp", "azure", "microsoft", "oracle",
+  "alibaba", "tencent", "digitalocean", "linode", "vultr", "choopa",
+  "hetzner", "ovh", "racknerd", "frantech", "contabo", "scaleway",
+  "leaseweb", "hostwinds", "m247",
+];
+const KNOWN_BAD_JA3 = new Set([
+  // Add observed bot TLS fingerprints here as they are identified.
+]);
 const DEFAULT_ADMIN_SETTINGS = Object.freeze({
   intent: {
     sensitivity: 62,
@@ -1602,6 +1618,81 @@ async function syncIntentProfileToShopifyAdmin(env, payload, scoredProfile) {
   return true;
 }
 
+function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidence) {
+  const cf = request && request.cf ? request.cf : {};
+  let score = Number(baseScore) || 0;
+  let isBot = baseIsBot === true;
+  let confidence = baseConfidence === "high" ? "high" : "low";
+  const reasons = [];
+
+  // Free-plan signal available on all Cloudflare plans.
+  const threatScore = Number(cf.threatScore) || 0;
+  if (threatScore > 30) {
+    score = Math.max(score, 0.9);
+    isBot = true;
+    confidence = "high";
+    reasons.push(`cf_threat_${threatScore}`);
+  } else if (threatScore > 10) {
+    score = Math.max(score, Math.min(1, score + 0.25));
+    reasons.push(`cf_threat_${threatScore}`);
+  }
+
+  // Enterprise Bot Management signal (safe no-op when absent).
+  const bm = cf && typeof cf.botManagement === "object" ? cf.botManagement : null;
+  if (bm) {
+    const bmScore = Number(bm.score);
+    if (Number.isFinite(bmScore)) {
+      if (bmScore <= 10) {
+        score = Math.max(score, 0.95);
+        isBot = true;
+        confidence = "high";
+        reasons.push(`cf_bm_score_${bmScore}`);
+      } else if (bmScore <= 30) {
+        score = Math.max(score, Math.min(1, score + 0.4));
+        reasons.push(`cf_bm_score_${bmScore}`);
+      }
+    }
+    if (bm.verifiedBot === true) reasons.push("cf_verified_bot");
+    if (typeof bm.ja3Hash === "string" && KNOWN_BAD_JA3.has(bm.ja3Hash)) {
+      score = Math.max(score, 0.95);
+      isBot = true;
+      confidence = "high";
+      reasons.push("cf_bad_ja3");
+    }
+    if (typeof bm.ja4 === "string" && bm.ja4.length > 0) {
+      reasons.push("cf_ja4_present");
+    }
+  }
+
+  // Datacenter reputation by ASN and ASN organization.
+  const asn = Number(cf.asn) || 0;
+  if (asn && DATACENTER_ASNS.has(asn)) {
+    score = Math.max(score, Math.min(1, score + 0.45));
+    reasons.push(`datacenter_asn_${asn}`);
+  }
+
+  const asOrg = sanitizeString(cf.asOrganization, 140).toLowerCase();
+  if (asOrg && DATACENTER_ORG_HINTS.some((hint) => asOrg.includes(hint))) {
+    score = Math.max(score, Math.min(1, score + 0.25));
+    reasons.push("datacenter_as_org");
+  }
+
+  if (score >= 0.9) {
+    isBot = true;
+    confidence = "high";
+  }
+
+  return {
+    score: Number(Math.min(1, score).toFixed(2)),
+    isBot,
+    confidence,
+    reasons,
+    cfThreatScore: threatScore,
+    cfAsn: asn || null,
+    cfAsOrganization: asOrg || null,
+  };
+}
+
 async function handleStats(request, env, corsHeaders, ctx) {
   const { body } = await parseJsonRequest(request);
   const { shop, isBot, botScore, confidence, isMobile, isLegitimate, isCouponBot, source, page, ua } = body;
@@ -1611,52 +1702,11 @@ async function handleStats(request, env, corsHeaders, ctx) {
 
   const today = new Date().toISOString().split("T")[0];
 
-  // --- Server-side signals from Cloudflare (free, no Bot Management needed) ---
-  // cf.botManagement is only on Enterprise; cf.threatScore and cf.asn are on all plans.
-  const cf = request.cf || {};
-  let serverScore = Number(botScore) || 0;
-  let serverConfidence = confidence || "low";
-  let serverIsBot = isBot === true;
-  const cfReasons = [];
-
-  // Cloudflare threat score: 0–100. Score > 10 = suspicious, > 30 = high threat.
-  const cfThreat = Number(cf.threatScore) || 0;
-  if (cfThreat > 30) {
-    serverScore = Math.max(serverScore, 0.9);
-    serverIsBot = true;
-    serverConfidence = "high";
-    cfReasons.push("cf_threat_" + cfThreat);
-  } else if (cfThreat > 10) {
-    serverScore = Math.max(serverScore, Math.min(1, serverScore + 0.25));
-    cfReasons.push("cf_threat_" + cfThreat);
-  }
-
-  // Known datacenter/VPS/hosting ASNs — confirmed scrapers run in these.
-  // 45102=Alibaba, 396982=Google Cloud, 16509=AWS, 14618=AWS, 8075=Azure,
-  // 13335=Cloudflare, 20473=Choopa/Vultr, 19527=Google, 15169=Google,
-  // 36351=SoftLayer/IBM, 46606=Unified Layer, 32244=Liquid Web,
-  // 55967=Baidu, 38365=Baidu, 134238=Tencent, 132203=Tencent,
-  // 55286=B2 Net Solutions, 53667=FranTech, 209=Qwest/CenturyLink hosting.
-  const datacenterASNs = new Set([
-    45102, 396982, 16509, 14618, 8075, 20473, 19527, 15169,
-    36351, 46606, 32244, 55967, 38365, 134238, 132203,
-    55286, 53667, 35913, 40021, 62567, 63949, 24940, 51167,
-    9009, 49815, 60781, 34119, 197695, 206728, 48693,
-  ]);
-  const cfAsn = Number(cf.asn) || 0;
-  if (cfAsn && datacenterASNs.has(cfAsn)) {
-    serverScore = Math.max(serverScore, Math.min(1, serverScore + 0.45));
-    cfReasons.push("datacenter_asn_" + cfAsn);
-    if (serverScore >= 0.9) {
-      serverIsBot = true;
-      serverConfidence = "high";
-    }
-  }
-
-  // Combine with client score — take the higher of the two.
-  const finalIsBot = serverIsBot;
-  const finalBotScore = serverScore;
-  const finalConfidence = serverConfidence;
+  // Cloudflare-native edge enrichment (threat score, botManagement, ASN/org hints, JA3/JA4).
+  const cfRisk = applyCloudflareRiskSignals(request, botScore, isBot, confidence);
+  const finalIsBot = cfRisk.isBot;
+  const finalBotScore = cfRisk.score;
+  const finalConfidence = cfRisk.confidence;
   const pixelProtected = finalIsBot && finalConfidence === "high" && !isLegitimate ? 1 : 0;
 
   // Batch both writes into a single round-trip — halves the D1 latency on the hot path.

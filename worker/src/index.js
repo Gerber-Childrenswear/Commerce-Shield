@@ -153,6 +153,9 @@ export default {
       if (url.pathname === "/api/integrations/bloomreach/intent-profile" && request.method === "POST") {
         return handleBloomreachIntentProfile(request, env, corsHeaders, ctx);
       }
+      if (url.pathname === "/api/turnstile-verify" && request.method === "POST") {
+        return handleTurnstileVerify(request, env, corsHeaders);
+      }
       if (url.pathname === "/cs-pixel-guard.js" && request.method === "GET") {
         return servePixelGuard(url);
       }
@@ -2023,6 +2026,51 @@ function serveDashboard(url) {
   });
 }
 
+async function handleTurnstileVerify(request, env, corsHeaders) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, error: "invalid_json" }, 400, corsHeaders);
+  }
+
+  const token = typeof body?.token === "string" ? body.token.slice(0, 2048) : "";
+  const action = typeof body?.action === "string" ? body.action.slice(0, 50) : "";
+
+  if (!token) {
+    return jsonResponse({ ok: false, error: "missing_token" }, 400, corsHeaders);
+  }
+
+  const secret = env.TURNSTILE_SECRET_KEY;
+  if (!secret) {
+    // Not configured — fail open so real users aren't blocked
+    return jsonResponse({ ok: true, note: "not_configured" }, 200, corsHeaders);
+  }
+
+  const form = new URLSearchParams();
+  form.set("secret", secret);
+  form.set("response", token);
+  if (action) form.set("action", action);
+  const ip = request.headers.get("CF-Connecting-IP");
+  if (ip) form.set("remoteip", ip);
+
+  let result;
+  try {
+    const resp = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body: form,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+    result = await resp.json();
+  } catch {
+    // Upstream error — fail open
+    return jsonResponse({ ok: true, note: "upstream_error" }, 200, corsHeaders);
+  }
+
+  const ok = result.success === true;
+  return jsonResponse({ ok }, ok ? 200 : 403, corsHeaders);
+}
+
 function servePixelGuard(url) {
   const shop = normalizeShopDomain(url.searchParams.get("shop"));
   const reportOnly = url.searchParams.get("mode") === "report";
@@ -2188,6 +2236,21 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled) {
     suppressedPixels: 0
   };
   window.__CommerceShieldPixelGuard = state;
+
+  // External signals (e.g. Turnstile) can call markBot() to escalate classification.
+  // Never blocks user actions — only installs analytics pixel suppression.
+  state.markBot = function(reason) {
+    if (state.suppressing || config.reportOnly) return;
+    state.suppressing = true;
+    if (reason && !decision.reasons.includes(reason)) decision.reasons.push(reason);
+    decision.isBot = true;
+    decision.confidence = 'high';
+    decision.botScore = Math.max(decision.botScore, 0.95);
+    state.decision = decision;
+    installFunctionStubs();
+    installNetworkGuards();
+    installDomGuards();
+  };
 
   // Allow borderline scores (0.25–0.89) through for behavioral check.
   // Exit only if clearly human: no fingerprinting signals at all (score 0).

@@ -1,0 +1,27 @@
+{% comment %}
+  Commerce Shield — Order Status / Thank-You Page Analytics Suppression
+
+  HOW TO USE:
+    Copy the <script> block below (not this comment) and paste it into:
+    Shopify Admin → Settings → Checkout → scroll to "Order status page"
+      → "Additional scripts" textarea → Save
+
+  WHAT IT DOES:
+    Loads the Commerce Shield pixel guard on the order status / thank-you page.
+    Bots that bypassed the storefront and completed checkout directly will have
+    their GA4 and Meta Pixel analytics suppressed here.
+
+    Liquid variables ({{ }}) work inside "Additional scripts" so
+    shop.permanent_domain resolves correctly at render time.
+{% endcomment %}
+
+<script>
+(function() {
+  var shop = {{ shop.permanent_domain | json }};
+  var origin = 'https://commerce-shield-prod.ncassidy.workers.dev';
+  var s = document.createElement('script');
+  s.src = origin + '/cs-pixel-guard.js?shop=' + encodeURIComponent(shop) + '&enabled=1';
+  s.async = true;
+  document.head.appendChild(s);
+})();
+</script>

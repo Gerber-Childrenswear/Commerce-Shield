@@ -1,0 +1,68 @@
+{% comment %}
+  Commerce Shield — Turnstile silent bot-classification signal.
+
+  HOW TO USE:
+    {% render 'cs-turnstile-signal' %}
+
+  WHERE TO ADD:
+    - cart.liquid  (or sections/main-cart-footer.liquid)  → after the cart form
+    - customers/login.liquid                               → after the login form
+
+  WHAT IT DOES:
+    Runs an invisible Turnstile challenge. Real browsers pass silently (~100ms).
+    If server-side verification returns failure (confirmed bot), the pixel guard's
+    markBot() is called — analytics pixels (GA4, Meta, etc.) are suppressed for
+    that session. No user is ever blocked or shown a challenge.
+{% endcomment %}
+
+<div id="cs-ts-widget" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true"></div>
+<script>
+(function() {
+  'use strict';
+
+  var SITE_KEY = '0x4AAAAAADI8ti4vY8C6Vy8O';
+  var WORKER   = 'https://commerce-shield-prod.ncassidy.workers.dev';
+
+  function verify(token) {
+    fetch(WORKER + '/api/turnstile-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token, action: 'storefront' }),
+      keepalive: true
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) {
+        // Server-side verify failed — confirmed bot. Suppress analytics pixels.
+        var pg = window.__CommerceShieldPixelGuard;
+        if (pg && typeof pg.markBot === 'function') {
+          pg.markBot('turnstile_verify_fail');
+        }
+      }
+    })
+    .catch(function() { /* network error — fail open, don't suppress */ });
+  }
+
+  function render() {
+    if (typeof window.turnstile === 'undefined') return;
+    // appearance: 'interaction-only' → completely invisible to real users.
+    // execution: 'render' → challenge runs immediately on render, no user action needed.
+    window.turnstile.render('#cs-ts-widget', {
+      sitekey: SITE_KEY,
+      appearance: 'interaction-only',
+      execution: 'render',
+      callback: verify,
+      'error-callback': function() { /* Turnstile error ≠ bot signal */ },
+      'unsupported-callback': function() { /* Older browsers — ignore */ }
+    });
+  }
+
+  // Named onload callback so Turnstile calls it once ready.
+  window.__csTsOnload = render;
+
+  var s = document.createElement('script');
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__csTsOnload';
+  s.async = true;
+  document.head.appendChild(s);
+})();
+</script>

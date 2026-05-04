@@ -5,8 +5,8 @@
     {% render 'cs-turnstile-signal' %}
 
   WHERE TO ADD:
-    - customers/login.liquid → after the login form
-    - customers/register.liquid → after the register form
+    - customers/login.liquid → inside the form, right before the submit button
+    - customers/register.liquid → inside the form, right before the submit button
 
   WHAT IT DOES:
     Intercepts form submit and runs a Turnstile challenge before allowing it.
@@ -104,7 +104,7 @@
       // 'managed' → Cloudflare decides: invisible for clean browsers,
       // shows a checkbox challenge for suspicious ones automatically.
       appearance: 'interaction-only',
-      execution: 'render',
+      execution: 'execute',
       callback: onToken,
       'error-callback': onError,
       'unsupported-callback': onError
@@ -121,8 +121,12 @@
         hideError();
         pendingSubmit = form;
         if (widgetId !== null && window.turnstile) {
-          // Re-execute if widget already rendered (handles page cached state).
           window.turnstile.reset(widgetId);
+          window.turnstile.execute(widgetId);
+        } else {
+          // Turnstile didn't load — fail open so real users are never stuck.
+          verified = true;
+          form.submit();
         }
       });
     });

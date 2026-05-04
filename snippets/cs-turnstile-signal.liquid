@@ -1,5 +1,5 @@
 {% comment %}
-  Commerce Shield — Turnstile silent bot-classification signal.
+  Commerce Shield — Turnstile form gate for login/register.
 
   HOW TO USE:
     {% render 'cs-turnstile-signal' %}
@@ -9,13 +9,19 @@
     - customers/register.liquid → after the register form
 
   WHAT IT DOES:
-    Runs an invisible Turnstile challenge on login/register. Real browsers pass 
-    silently (~100ms). If verification fails (confirmed bot), the pixel guard's
-    markBot() is called — analytics pixels (GA4, Meta, etc.) are suppressed for
-    that session. No user is ever blocked or shown a challenge.
+    Intercepts form submit and runs a Turnstile challenge before allowing it.
+    - Clean humans:       invisible, passes in ~100ms, form submits normally.
+    - Suspicious users:   Cloudflare shows a quick checkbox challenge automatically.
+    - Confirmed bots:     server-side verify fails, form submit is blocked with an error message.
+    - Analytics pixels (GA4, Meta, etc.) are also suppressed for confirmed bots.
+    - Network errors always fail open — real users are never stuck.
 {% endcomment %}
 
-<div id="cs-ts-widget" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true"></div>
+<div id="cs-ts-widget" style="margin-top:12px"></div>
+<div id="cs-ts-error" style="display:none;margin-top:10px;padding:10px 14px;background:#fff2f2;border:1px solid #fca5a5;border-radius:6px;color:#991b1b;font-size:14px">
+  We were unable to verify your request. Please refresh the page and try again.
+</div>
+
 <script>
 (function() {
   'use strict';
@@ -23,42 +29,109 @@
   var SITE_KEY = '0x4AAAAAADI8ti4vY8C6Vy8O';
   var WORKER   = 'https://commerce-shield-prod.ncassidy.workers.dev';
 
-  function verify(token) {
+  var widgetId = null;
+  var pendingSubmit = null;
+  var verified = false;
+
+  function showError(msg) {
+    var el = document.getElementById('cs-ts-error');
+    if (el) {
+      el.textContent = msg || 'We were unable to verify your request. Please refresh and try again.';
+      el.style.display = 'block';
+    }
+  }
+
+  function hideError() {
+    var el = document.getElementById('cs-ts-error');
+    if (el) el.style.display = 'none';
+  }
+
+  function onToken(token) {
+    // Got a token from Turnstile — verify server-side before allowing submit.
     fetch(WORKER + '/api/turnstile-verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: token, action: 'storefront' }),
+      body: JSON.stringify({ token: token, action: 'account' }),
       keepalive: true
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      if (!d.ok) {
-        // Server-side verify failed — confirmed bot. Suppress analytics pixels.
-        var pg = window.__CommerceShieldPixelGuard;
-        if (pg && typeof pg.markBot === 'function') {
-          pg.markBot('turnstile_verify_fail');
+      if (d.ok) {
+        // Verified human — suppress pixels just in case, then allow form submit.
+        verified = true;
+        hideError();
+        if (pendingSubmit) {
+          var f = pendingSubmit;
+          pendingSubmit = null;
+          f.submit();
         }
+      } else {
+        // Confirmed bot — block submit, suppress analytics pixels, show error.
+        verified = false;
+        pendingSubmit = null;
+        showError('Security check failed. If you are a real person, please refresh the page and try again.');
+        var pg = window.__CommerceShieldPixelGuard;
+        if (pg && typeof pg.markBot === 'function') pg.markBot('turnstile_verify_fail');
+        // Reset widget so a genuine retry is possible.
+        if (widgetId !== null && window.turnstile) window.turnstile.reset(widgetId);
       }
     })
-    .catch(function() { /* network error — fail open, don't suppress */ });
+    .catch(function() {
+      // Network error — fail open so real users are never stuck.
+      verified = true;
+      if (pendingSubmit) {
+        var f = pendingSubmit;
+        pendingSubmit = null;
+        f.submit();
+      }
+    });
+  }
+
+  function onError() {
+    // Turnstile challenge error (e.g. network) — fail open.
+    verified = true;
+    if (pendingSubmit) {
+      var f = pendingSubmit;
+      pendingSubmit = null;
+      f.submit();
+    }
   }
 
   function render() {
     if (typeof window.turnstile === 'undefined') return;
-    // appearance: 'interaction-only' → completely invisible to real users.
-    // execution: 'render' → challenge runs immediately on render, no user action needed.
-    window.turnstile.render('#cs-ts-widget', {
+    widgetId = window.turnstile.render('#cs-ts-widget', {
       sitekey: SITE_KEY,
+      // 'managed' → Cloudflare decides: invisible for clean browsers,
+      // shows a checkbox challenge for suspicious ones automatically.
       appearance: 'interaction-only',
       execution: 'render',
-      callback: verify,
-      'error-callback': function() { /* Turnstile error ≠ bot signal */ },
-      'unsupported-callback': function() { /* Older browsers — ignore */ }
+      callback: onToken,
+      'error-callback': onError,
+      'unsupported-callback': onError
     });
   }
 
-  // Named onload callback so Turnstile calls it once ready.
-  window.__csTsOnload = render;
+  function interceptForms() {
+    // Find all account forms on the page (login + register share this pattern).
+    var forms = document.querySelectorAll('form[action*="/account"]');
+    forms.forEach(function(form) {
+      form.addEventListener('submit', function(e) {
+        if (verified) return; // Already passed — let it through.
+        e.preventDefault();
+        hideError();
+        pendingSubmit = form;
+        if (widgetId !== null && window.turnstile) {
+          // Re-execute if widget already rendered (handles page cached state).
+          window.turnstile.reset(widgetId);
+        }
+      });
+    });
+  }
+
+  window.__csTsOnload = function() {
+    render();
+    interceptForms();
+  };
 
   var s = document.createElement('script');
   s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__csTsOnload';

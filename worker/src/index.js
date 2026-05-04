@@ -2031,7 +2031,7 @@ function servePixelGuard(url) {
   return new Response(buildPixelGuardScript(shop, url.origin, reportOnly, enabled), {
     headers: {
       "Content-Type": "application/javascript; charset=utf-8",
-      "Cache-Control": "no-store",
+      "Cache-Control": "public, max-age=300, s-maxage=300, stale-while-revalidate=60",
       "X-Content-Type-Options": "nosniff",
     },
   });

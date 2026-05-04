@@ -2001,7 +2001,9 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled) {
   };
   window.__CommerceShieldPixelGuard = state;
 
-  if (!state.suppressing) return;
+  // Allow borderline scores (0.25–0.89) through for behavioral check.
+  // Clearly human visitors (score < 0.25) exit immediately.
+  if (!state.suppressing && decision.botScore < 0.25) return;
 
   const blockedHostSuffixes = [
     "facebook.com",
@@ -2257,9 +2259,59 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled) {
     }
   }
 
-  installFunctionStubs();
-  installNetworkGuards();
-  installDomGuards();
+  // Install suppression hooks immediately for confirmed bots (score >= 0.9).
+  if (state.suppressing) {
+    installFunctionStubs();
+    installNetworkGuards();
+    installDomGuards();
+  }
+
+  // Behavioral check: listen for human interaction signals.
+  // For borderline scores (0.25–0.89): if no interaction in 2.5 s → boost score,
+  // install suppression, report as bot. If interaction detected and we were
+  // provisionally suppressing → restore native network functions.
+  (function setupBehavioralCheck() {
+    let interacted = false;
+    const evts = ['mousemove', 'scroll', 'click', 'keydown', 'touchstart', 'pointerdown'];
+    function onInteract() {
+      interacted = true;
+      for (const e of evts) window.removeEventListener(e, onInteract, { passive: true });
+    }
+    for (const e of evts) window.addEventListener(e, onInteract, { passive: true });
+
+    setTimeout(function() {
+      for (const e of evts) window.removeEventListener(e, onInteract, { passive: true });
+      state.behavioralCheck = { completed: true, hadInteraction: interacted };
+
+      if (!interacted) {
+        // No mouse/scroll/key/touch in 2.5 s — elevate score.
+        const boosted = Math.min(1, decision.botScore + 0.6);
+        decision.botScore = Number(boosted.toFixed(2));
+        decision.isBot = boosted >= 0.9;
+        decision.confidence = decision.isBot ? 'high' : 'low';
+        if (!decision.reasons.includes('no_interaction')) decision.reasons.push('no_interaction');
+        state.decision = decision;
+
+        if (decision.isBot && !state.suppressing && !config.reportOnly) {
+          state.suppressing = true;
+          installFunctionStubs();
+          installNetworkGuards();
+          installDomGuards();
+        }
+      } else if (interacted && state.suppressing && decision.botScore < 0.9) {
+        // Was borderline-suppressed but user proved human — restore native network fns.
+        // (Already-blocked pixels cannot be un-blocked, but future ones are allowed.)
+        if (native.fetch) window.fetch = native.fetch;
+        if (native.sendBeacon) navigator.sendBeacon = native.sendBeacon;
+        if (native.xhr) window.XMLHttpRequest = native.xhr;
+        state.suppressing = false;
+        decision.isBot = false;
+        decision.confidence = 'low';
+        decision.reasons.push('interaction_cleared');
+        state.decision = decision;
+      }
+    }, 2500);
+  })();
 })();`;
 }
 

@@ -20,11 +20,14 @@ const SENSITIVE_CORS_HEADERS = {
 const MAX_JSON_BODY_BYTES = 16 * 1024;
 const INTENT_EVENT_LIMIT = 120;
 const BLOOMREACH_LOOKUP_LIMIT = 30;
+const PIXEL_GUARD_EVENT_LIMIT = 240;
 const NONCE_WINDOW_SECONDS = 300;
 const SHOPIFY_ADMIN_API_VERSION_FALLBACK = "2026-01";
 const SHOPIFY_INTENT_NAMESPACE = "$app";
 const SHOPIFY_INTENT_MODEL_VERSION = "intent-v1";
 const SHOPIFY_AUDIT_REQUIRED_SCOPES = ["read_themes", "read_script_tags"];
+const SHOPIFY_THEME_INSTALL_REQUIRED_SCOPES = ["read_themes", "write_themes"];
+const PIXEL_GUARD_MARKER = "Commerce Shield Pixel Guard";
 const INTENT_HIGH_TIERS = new Set(["high_intent", "purchase_ready", "customer"]);
 const INTENT_MEDIUM_TIERS = new Set(["considering", "interested"]);
 const DEFAULT_ADMIN_SETTINGS = Object.freeze({
@@ -102,6 +105,9 @@ export default {
       if (url.pathname === "/api/stats" && request.method === "POST") {
         return handleStats(request, env, corsHeaders, ctx);
       }
+      if (url.pathname === "/api/pixel-guard/event" && request.method === "POST") {
+        return handlePixelGuardEvent(request, env, corsHeaders, ctx);
+      }
       if (url.pathname === "/api/dashboard" && request.method === "GET") {
         return handleDashboardData(url, env, corsHeaders);
       }
@@ -110,6 +116,9 @@ export default {
       }
       if (url.pathname === "/api/admin/settings") {
         return handleAdminSettings(request, url, env, corsHeaders);
+      }
+      if (url.pathname === "/api/admin/install-pixel-guard" && request.method === "POST") {
+        return handleAdminInstallPixelGuard(request, url, env, corsHeaders);
       }
       if (url.pathname === "/api/admin/intent-summary" && request.method === "GET") {
         return handleAdminIntentSummary(url, env, corsHeaders);
@@ -125,6 +134,9 @@ export default {
       }
       if (url.pathname === "/api/integrations/bloomreach/intent-profile" && request.method === "POST") {
         return handleBloomreachIntentProfile(request, env, corsHeaders, ctx);
+      }
+      if (url.pathname === "/cs-pixel-guard.js" && request.method === "GET") {
+        return servePixelGuard(url);
       }
       if (url.pathname === "/" || url.pathname === "/app" || url.pathname.startsWith("/app/")) {
         return serveEmbeddedAdmin(url);
@@ -190,6 +202,33 @@ async function parseJsonRequest(request, maxBytes = MAX_JSON_BODY_BYTES) {
 function sanitizeString(value, maxLength = 255) {
   if (typeof value !== "string") return "";
   return value.trim().slice(0, maxLength);
+}
+
+function timingSafeEqualString(left, right) {
+  if (typeof left !== "string" || typeof right !== "string") return false;
+  if (left.length !== right.length) return false;
+  let result = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    result |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return result === 0;
+}
+
+function requireWorkerAdmin(request, env) {
+  const configuredToken = sanitizeString(env.COMMERCE_SHIELD_ADMIN_TOKEN, 500);
+  if (!configuredToken) {
+    throw new HttpError("Commerce Shield admin token is not configured for theme installation", 503);
+  }
+
+  const header = request.headers.get("authorization") || "";
+  if (!header.startsWith("Bearer ")) {
+    throw new HttpError("Authorization header required", 401);
+  }
+
+  const token = header.slice(7);
+  if (!timingSafeEqualString(token, configuredToken)) {
+    throw new HttpError("Invalid Commerce Shield admin token", 403);
+  }
 }
 
 function normalizeShopDomain(value) {
@@ -412,6 +451,16 @@ async function handleAdminSettings(request, url, env, corsHeaders) {
   throw new HttpError("Method not allowed", 405);
 }
 
+async function handleAdminInstallPixelGuard(request, url, env, corsHeaders) {
+  requireWorkerAdmin(request, env);
+  const { body } = await parseJsonRequest(request, 4 * 1024);
+  const shop = normalizeShopDomain(body.shop || url.searchParams.get("shop"));
+  if (!shop) throw new HttpError("Missing or invalid shop", 400);
+
+  const result = await installPixelGuardInTheme(env, shop, url.origin);
+  return jsonResponse({ shop, ...result }, 200, corsHeaders);
+}
+
 async function fetchIntentSummary(env, shop) {
   const settings = await getAdminSettings(env, shop);
   const profileStats = await env.DB.prepare(
@@ -511,6 +560,26 @@ async function shopifyAdminRestGet(env, shop, path) {
   return response.json();
 }
 
+async function shopifyAdminRestPut(env, shop, path, body) {
+  const accessToken = getShopifyAccessToken(env, shop);
+  if (!accessToken) throw new HttpError("Shopify Admin token is not configured for this shop", 503);
+  const apiVersion = normalizeAdminApiVersion(env.SHOPIFY_ADMIN_API_VERSION);
+  const response = await fetch(`https://${shop}/admin/api/${apiVersion}${path}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": accessToken,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Shopify REST request failed: ${response.status} ${await response.text()}`);
+  }
+
+  return response.json();
+}
+
 async function shopifyAdminGraphql(env, shop, query, variables = {}) {
   const accessToken = getShopifyAccessToken(env, shop);
   if (!accessToken) throw new HttpError("Shopify Admin token is not configured for this shop", 503);
@@ -534,6 +603,114 @@ async function shopifyAdminGraphql(env, shop, query, variables = {}) {
   }
 
   return result.data || {};
+}
+
+async function fetchGrantedShopifyScopes(env, shop) {
+  const accessScopesResponse = await shopifyAdminRestGet(env, shop, "/oauth/access_scopes.json");
+  return (accessScopesResponse?.access_scopes || []).map((scope) => scope.handle);
+}
+
+async function fetchMainTheme(env, shop) {
+  const themesData = await shopifyAdminGraphql(
+    env,
+    shop,
+    `query CommerceShieldThemes {
+      themes(first: 10) {
+        nodes {
+          id
+          name
+          role
+          updatedAt
+        }
+      }
+    }`,
+  );
+
+  const themeNodes = themesData?.themes?.nodes || [];
+  return themeNodes.find((theme) => theme.role === "MAIN") || themeNodes[0] || null;
+}
+
+async function fetchThemeTextFile(env, shop, themeId, filename) {
+  const themeData = await shopifyAdminGraphql(
+    env,
+    shop,
+    `query CommerceShieldThemeFile($themeId: ID!, $filenames: [String!]!) {
+      theme(id: $themeId) {
+        files(filenames: $filenames) {
+          nodes {
+            filename
+            body {
+              ... on OnlineStoreThemeFileBodyText {
+                content
+              }
+            }
+          }
+          userErrors {
+            code
+            filename
+          }
+        }
+      }
+    }`,
+    {
+      themeId,
+      filenames: [filename],
+    },
+  );
+
+  const file = (themeData?.theme?.files?.nodes || []).find((entry) => entry.filename === filename);
+  return normalizeThemeText(file?.body?.content);
+}
+
+async function upsertThemeTextFile(env, shop, themeId, filename, content) {
+  try {
+    const result = await shopifyAdminGraphql(
+      env,
+      shop,
+      `mutation CommerceShieldThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) {
+        themeFilesUpsert(themeId: $themeId, files: $files) {
+          upsertedThemeFiles {
+            filename
+          }
+          userErrors {
+            code
+            field
+            filename
+            message
+          }
+        }
+      }`,
+      {
+        themeId,
+        files: [
+          {
+            filename,
+            body: {
+              type: "TEXT",
+              value: content,
+            },
+          },
+        ],
+      },
+    );
+
+    const errors = result?.themeFilesUpsert?.userErrors || [];
+    if (errors.length > 0) {
+      throw new Error(errors.map((error) => error.message).join("; "));
+    }
+
+    return result?.themeFilesUpsert?.upsertedThemeFiles || [];
+  } catch (error) {
+    const numericThemeId = String(themeId).split("/").pop();
+    if (!/^\d+$/.test(numericThemeId)) throw error;
+    await shopifyAdminRestPut(env, shop, `/themes/${numericThemeId}/assets.json`, {
+      asset: {
+        key: filename,
+        value: content,
+      },
+    });
+    return [{ filename }];
+  }
 }
 
 function normalizeThemeText(content) {
@@ -587,6 +764,81 @@ function deriveAppHealthStatus(findings) {
   if (findings.some((finding) => finding.severity === "high")) return "critical";
   if (findings.some((finding) => finding.severity === "medium")) return "warning";
   return "healthy";
+}
+
+function buildPixelGuardThemeSnippet(shop, workerOrigin) {
+  const scriptUrl = `${workerOrigin.replace(/\/$/, "")}/cs-pixel-guard.js?shop=${encodeURIComponent(shop)}`;
+  return `  <!-- ${PIXEL_GUARD_MARKER} -->\n  <script src="${scriptUrl}"></script>\n`;
+}
+
+function insertPixelGuardIntoTheme(themeLiquid, shop, workerOrigin) {
+  const source = normalizeThemeText(themeLiquid);
+  const headMatch = source.match(/<head\b[^>]*>/i);
+  if (!headMatch || headMatch.index == null) {
+    throw new HttpError("layout/theme.liquid does not contain an opening <head> tag", 422);
+  }
+
+  const markerPattern = new RegExp(`\\s*<!--\\s*${PIXEL_GUARD_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*-->\\s*<script\\b[^>]*\\bsrc=["'][^"']*/cs-pixel-guard\\.js[^"']*["'][^>]*>\\s*</script>\\s*`, "gi");
+  const loosePattern = /\s*<script\b[^>]*\bsrc=["'][^"']*\/cs-pixel-guard\.js[^"']*["'][^>]*>\s*<\/script>\s*/gi;
+  const cleaned = source.replace(markerPattern, "\n").replace(loosePattern, "\n");
+  const nextHeadMatch = cleaned.match(/<head\b[^>]*>/i);
+  const insertAt = nextHeadMatch.index + nextHeadMatch[0].length;
+  const snippet = buildPixelGuardThemeSnippet(shop, workerOrigin);
+  const updated = `${cleaned.slice(0, insertAt)}\n${snippet}${cleaned.slice(insertAt).replace(/^\s*/, "")}`;
+
+  return {
+    content: updated,
+    changed: updated !== source,
+  };
+}
+
+async function installPixelGuardInTheme(env, shop, workerOrigin) {
+  const grantedScopes = await fetchGrantedShopifyScopes(env, shop);
+  const missingScopes = SHOPIFY_THEME_INSTALL_REQUIRED_SCOPES.filter((scope) => !grantedScopes.includes(scope));
+  if (missingScopes.length > 0) {
+    throw new HttpError(`Missing Shopify scope(s): ${missingScopes.join(", ")}`, 403);
+  }
+
+  const mainTheme = await fetchMainTheme(env, shop);
+  if (!mainTheme?.id) {
+    throw new HttpError("No main Shopify theme found", 404);
+  }
+
+  const filename = "layout/theme.liquid";
+  const themeLiquid = await fetchThemeTextFile(env, shop, mainTheme.id, filename);
+  if (!themeLiquid) {
+    throw new HttpError("layout/theme.liquid could not be read", 422);
+  }
+
+  const currentHeadMatch = themeLiquid.match(/<head\b[^>]*>/i);
+  const currentAfterHead = currentHeadMatch?.index == null
+    ? ""
+    : themeLiquid.slice(currentHeadMatch.index + currentHeadMatch[0].length).trimStart();
+  const desiredSnippet = buildPixelGuardThemeSnippet(shop, workerOrigin).trim();
+  const alreadyInstalledAtHead = currentAfterHead.startsWith(desiredSnippet);
+
+  if (alreadyInstalledAtHead) {
+    return {
+      ok: true,
+      installed: false,
+      alreadyInstalled: true,
+      message: "Pixel guard is already first in layout/theme.liquid <head>.",
+      theme: { id: mainTheme.id, name: mainTheme.name, role: mainTheme.role },
+      filename,
+    };
+  }
+
+  const nextTheme = insertPixelGuardIntoTheme(themeLiquid, shop, workerOrigin);
+  await upsertThemeTextFile(env, shop, mainTheme.id, filename, nextTheme.content);
+
+  return {
+    ok: true,
+    installed: true,
+    alreadyInstalled: false,
+    message: "Pixel guard installed at the beginning of layout/theme.liquid <head>.",
+    theme: { id: mainTheme.id, name: mainTheme.name, role: mainTheme.role },
+    filename,
+  };
 }
 
 async function buildStoreAudit(env, shop) {
@@ -1417,6 +1669,34 @@ async function handleStats(request, env, corsHeaders, ctx) {
   return jsonResponse({ ok: true }, 200, corsHeaders);
 }
 
+async function handlePixelGuardEvent(request, env, corsHeaders, ctx) {
+  pruneSecurityTables(env, ctx);
+  const { body } = await parseJsonRequest(request, 8 * 1024);
+  const shop = normalizeShopDomain(body.shop);
+  if (!shop) throw new HttpError("Missing shop", 400);
+
+  const ip = extractIp(request);
+  await applyRateLimit(env, "pixel_guard", `${shop}:${ip}`, PIXEL_GUARD_EVENT_LIMIT, 60);
+
+  const confidence = sanitizeString(body.confidence, 20).toLowerCase();
+  const isBot = body.isBot === true;
+  const pixelCount = clampNumber(body.count, 1, 1, 50);
+
+  if (!isBot || confidence !== "high") {
+    return jsonResponse({ ok: true, accepted: false }, 200, corsHeaders);
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  await env.DB.prepare(
+    `INSERT INTO daily_stats (shop, date, total_visits, human_visits, bot_visits, coupon_bots, pixels_protected)
+     VALUES (?, ?, 0, 0, 0, 0, ?)
+     ON CONFLICT(shop, date) DO UPDATE SET
+       pixels_protected = pixels_protected + ?`
+  ).bind(shop, today, pixelCount, pixelCount).run();
+
+  return jsonResponse({ ok: true, accepted: true, pixelsProtected: pixelCount }, 200, corsHeaders);
+}
+
 async function handleIntentEvent(request, env, corsHeaders, ctx) {
   // Fire-and-forget probabilistic cleanup (no await — doesn't block the hot path).
   pruneSecurityTables(env, ctx);
@@ -1617,6 +1897,370 @@ function serveDashboard(url) {
   return new Response(getDashboardHTML(shop), {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
+}
+
+function servePixelGuard(url) {
+  const shop = normalizeShopDomain(url.searchParams.get("shop"));
+  const reportOnly = url.searchParams.get("mode") === "report";
+  const enabled = url.searchParams.get("enabled") !== "0";
+
+  return new Response(buildPixelGuardScript(shop, url.origin, reportOnly, enabled), {
+    headers: {
+      "Content-Type": "application/javascript; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
+function buildPixelGuardScript(shop, origin, reportOnly, enabled) {
+  return `(() => {
+  "use strict";
+
+  const config = {
+    shop: ${JSON.stringify(shop)},
+    apiBase: ${JSON.stringify(origin)},
+    enabled: ${enabled ? "true" : "false"},
+    reportOnly: ${reportOnly ? "true" : "false"},
+    version: "pixel-guard-v1"
+  };
+
+  if (!config.enabled || !config.shop || window.__CommerceShieldPixelGuard?.active) return;
+
+  const ua = navigator.userAgent || "";
+  const native = {
+    fetch: window.fetch,
+    sendBeacon: navigator.sendBeacon,
+    appendChild: Element.prototype.appendChild,
+    insertBefore: Element.prototype.insertBefore,
+    image: window.Image,
+    xhr: window.XMLHttpRequest
+  };
+
+  function classifyVisitor() {
+    const reasons = [];
+    let score = 0;
+    const lowerUa = ua.toLowerCase();
+    const hardUa = /(adsbot|applebot|baiduspider|bingbot|bot|crawler|curl|duckduckbot|facebookexternalhit|googlebot|headlesschrome|httpclient|lighthouse|micromessenger|mmwebsdk|phantomjs|playwright|prerender|puppeteer|python-requests|semrushbot|selenium|spider|wget|weixin|xweb\/|yandexbot)/i.test(ua);
+    const automationUa = /(headlesschrome|phantomjs|playwright|puppeteer|selenium|webdriver|jsdom)/i.test(ua);
+
+    if (hardUa) {
+      score = Math.max(score, 0.92);
+      reasons.push("bot_user_agent");
+    }
+    if (automationUa) {
+      score = Math.max(score, 0.94);
+      reasons.push("automation_user_agent");
+    }
+    if (navigator.webdriver === true) {
+      score = Math.max(score, 0.96);
+      reasons.push("webdriver");
+    }
+    if (!/chrome|crios|safari|firefox|edg|opr|mobile/i.test(lowerUa)) {
+      score += 0.1;
+      reasons.push("non_browser_user_agent");
+    }
+    if (Array.isArray(navigator.languages) && navigator.languages.length === 0) {
+      score += 0.08;
+      reasons.push("empty_languages");
+    }
+    // Frozen/stale Chrome version — real Chrome auto-updates. Chrome < 130 is 18+ months
+    // out of date (Chrome 130 shipped Sep 2024). Confirmed scrapers use /125, /123, /120, /88.
+    const chromeVerMatch = ua.match(/Chrome\/(\d+)\./);
+    if (chromeVerMatch) {
+      const chromeVer = parseInt(chromeVerMatch[1], 10);
+      if (chromeVer < 100) {
+        // Severely stale (Chrome/88 etc) — very likely bot or Selenium
+        score = Math.max(score, 0.92);
+        reasons.push("stale_chrome_version");
+      } else if (chromeVer < 130) {
+        // Moderately stale (Chrome/120–129) — confirmed scrapers use these
+        score += 0.35;
+        reasons.push("stale_chrome_version");
+      }
+    }
+
+    score = Math.min(1, score);
+    const highConfidence = score >= 0.9;
+    return {
+      isBot: highConfidence,
+      confidence: highConfidence ? "high" : "low",
+      botScore: Number(score.toFixed(2)),
+      reasons
+    };
+  }
+
+  const decision = classifyVisitor();
+  const state = {
+    active: true,
+    version: config.version,
+    reportOnly: config.reportOnly,
+    suppressing: decision.isBot && decision.confidence === "high" && !config.reportOnly,
+    decision,
+    suppressedPixels: 0
+  };
+  window.__CommerceShieldPixelGuard = state;
+
+  if (!state.suppressing) return;
+
+  const blockedHostSuffixes = [
+    "facebook.com",
+    "facebook.net",
+    "google-analytics.com",
+    "googletagmanager.com",
+    "googleadservices.com",
+    "doubleclick.net",
+    "googlesyndication.com",
+    "tiktok.com",
+    "pinimg.com",
+    "pinterest.com",
+    "snapchat.com",
+    "sc-static.net",
+    "bing.com",
+    "clarity.ms",
+    "reddit.com",
+    "redditstatic.com",
+    "ads-twitter.com",
+    "analytics.twitter.com",
+    "cloudflareinsights.com",
+    "shopifysvc.com"
+  ];
+  const blockedPathMarkers = [
+    "/tr/",
+    "/collect",
+    "/g/collect",
+    "/pagead/",
+    "/conversion",
+    "/events",
+    "/adsct",
+    "/cdn-cgi/rum",
+    "/web-pixels"
+  ];
+
+  let pendingReports = 0;
+  let reportTimer = 0;
+
+  function getUrl(value) {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (value.url) return value.url;
+    return String(value);
+  }
+
+  function hostMatches(host, suffix) {
+    return host === suffix || host.endsWith("." + suffix);
+  }
+
+  function isPixelUrl(value) {
+    const raw = getUrl(value);
+    if (!raw) return false;
+    let target;
+    try {
+      target = new URL(raw, document.baseURI);
+    } catch {
+      return false;
+    }
+    const host = target.hostname.toLowerCase();
+    const path = target.pathname.toLowerCase();
+
+    for (const suffix of blockedHostSuffixes) {
+      if (hostMatches(host, suffix)) return true;
+    }
+    if (host === "cdn.shopify.com" && path.includes("/web-pixels")) return true;
+    if (host === "www.google.com" && (path.includes("/pagead/") || path.includes("/conversion"))) return true;
+    if (host === "www.googleadservices.com") return true;
+
+    for (const marker of blockedPathMarkers) {
+      if (path.includes(marker) && /(facebook|google|doubleclick|tiktok|pinterest|snap|bing|clarity|reddit|twitter|cloudflare|shopify)/i.test(host)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function reportSuppressedPixel(kind, url) {
+    state.suppressedPixels += 1;
+    state.lastSuppressed = {
+      kind,
+      url: String(url || "").slice(0, 180),
+      at: new Date().toISOString()
+    };
+    pendingReports += 1;
+    if (!reportTimer) {
+      reportTimer = setTimeout(flushReports, 800);
+    }
+  }
+
+  function flushReports() {
+    reportTimer = 0;
+    const count = Math.min(50, pendingReports);
+    pendingReports = Math.max(0, pendingReports - count);
+    if (!count) return;
+
+    const body = JSON.stringify({
+      shop: config.shop,
+      count,
+      isBot: true,
+      confidence: decision.confidence,
+      botScore: decision.botScore,
+      reason: decision.reasons.join(","),
+      page: location.pathname.slice(0, 500),
+      source: document.referrer.slice(0, 200),
+      ua: ua.slice(0, 200)
+    });
+    const endpoint = config.apiBase + "/api/pixel-guard/event";
+
+    try {
+      if (native.sendBeacon) {
+        const blob = new Blob([body], { type: "application/json" });
+        if (native.sendBeacon.call(navigator, endpoint, blob)) return;
+      }
+    } catch {}
+
+    try {
+      if (native.fetch) {
+        native.fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: true
+        }).catch(() => {});
+      }
+    } catch {}
+  }
+
+  function blockScriptNode(node) {
+    if (!node || String(node.tagName || "").toUpperCase() !== "SCRIPT") return false;
+    const src = node.src || node.getAttribute?.("src") || "";
+    if (!isPixelUrl(src)) return false;
+    reportSuppressedPixel("script", src);
+    try {
+      node.type = "text/plain";
+      node.removeAttribute("src");
+      node.setAttribute("data-commerce-shield-suppressed", "true");
+    } catch {}
+    return true;
+  }
+
+  function installFunctionStubs() {
+    const stubNames = ["fbq", "_fbq", "gtag", "pintrk", "snaptr", "twq", "rdt", "lintrk", "qp", "clarity"];
+    for (const name of stubNames) {
+      window[name] = function commerceShieldPixelStub() {
+        reportSuppressedPixel("function:" + name, name);
+        return undefined;
+      };
+      window[name].commerceShieldSuppressed = true;
+    }
+
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push = function commerceShieldDataLayerPush() {
+      reportSuppressedPixel("dataLayer", "dataLayer");
+      return window.dataLayer.length;
+    };
+
+    window.uetq = window.uetq || [];
+    window.uetq.push = function commerceShieldUetqPush() {
+      reportSuppressedPixel("uetq", "uetq");
+      return window.uetq.length;
+    };
+
+    window.ttq = window.ttq || {};
+    for (const method of ["page", "track", "identify", "load", "instance", "ready"]) {
+      window.ttq[method] = function commerceShieldTtqStub() {
+        reportSuppressedPixel("ttq:" + method, "ttq");
+        return window.ttq;
+      };
+    }
+  }
+
+  function installNetworkGuards() {
+    if (native.fetch) {
+      window.fetch = function commerceShieldFetch(input, init) {
+        const target = getUrl(input);
+        if (isPixelUrl(target)) {
+          reportSuppressedPixel("fetch", target);
+          return Promise.resolve(new Response("", { status: 204, statusText: "Commerce Shield Pixel Suppressed" }));
+        }
+        return native.fetch.apply(this, arguments);
+      };
+    }
+
+    if (native.sendBeacon) {
+      navigator.sendBeacon = function commerceShieldBeacon(url, data) {
+        if (isPixelUrl(url)) {
+          reportSuppressedPixel("beacon", url);
+          return true;
+        }
+        return native.sendBeacon.call(this, url, data);
+      };
+    }
+
+    if (native.xhr) {
+      window.XMLHttpRequest = function CommerceShieldXMLHttpRequest() {
+        const xhr = new native.xhr();
+        const open = xhr.open;
+        const send = xhr.send;
+        let blocked = false;
+        xhr.open = function commerceShieldXhrOpen(method, url) {
+          if (isPixelUrl(url)) {
+            blocked = true;
+            reportSuppressedPixel("xhr", url);
+            return undefined;
+          }
+          return open.apply(xhr, arguments);
+        };
+        xhr.send = function commerceShieldXhrSend() {
+          if (blocked) return undefined;
+          return send.apply(xhr, arguments);
+        };
+        return xhr;
+      };
+      window.XMLHttpRequest.prototype = native.xhr.prototype;
+    }
+  }
+
+  function installDomGuards() {
+    Element.prototype.appendChild = function commerceShieldAppendChild(node) {
+      if (blockScriptNode(node)) return node;
+      return native.appendChild.call(this, node);
+    };
+    Element.prototype.insertBefore = function commerceShieldInsertBefore(node, referenceNode) {
+      if (blockScriptNode(node)) return node;
+      return native.insertBefore.call(this, node, referenceNode);
+    };
+
+    if (native.image && window.HTMLImageElement) {
+      const srcDescriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src");
+      if (srcDescriptor?.set && srcDescriptor?.get) {
+        window.Image = function CommerceShieldImage(width, height) {
+          const img = arguments.length ? new native.image(width, height) : new native.image();
+          try {
+            Object.defineProperty(img, "src", {
+              configurable: true,
+              enumerable: true,
+              get() {
+                return srcDescriptor.get.call(img);
+              },
+              set(value) {
+                if (isPixelUrl(value)) {
+                  reportSuppressedPixel("image", value);
+                  return;
+                }
+                srcDescriptor.set.call(img, value);
+              }
+            });
+          } catch {}
+          return img;
+        };
+        window.Image.prototype = native.image.prototype;
+      }
+    }
+  }
+
+  installFunctionStubs();
+  installNetworkGuards();
+  installDomGuards();
+})();`;
 }
 
 function getDashboardHTML(defaultShop) {
@@ -1980,6 +2624,7 @@ function buildEmbeddedAdminHTML(shop, origin) {
     <input id="shopInput" placeholder="your-store.myshopify.com" value="${shop}">
     <select id="daysSelect"><option value="7">Last 7 days</option><option value="14">Last 14 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select>
     <button type="button" onclick="refreshActive(true)">Refresh Active Tab</button>
+    <button type="button" onclick="installPixelGuard()">Install Pixel Guard</button>
   </div>
   <div class="tabs">
     <button class="active" data-tab="bot-blocker" onclick="activateTab('bot-blocker')">Bot-Blocker</button>
@@ -1993,7 +2638,7 @@ function buildEmbeddedAdminHTML(shop, origin) {
   <section id="panel-conversion-mri" class="panel"><div class="load">Conversion MRI waits for enough evidence before surfacing diagnostics.</div></section>
 </div>
 <script>
-const API='${origin}';const state={tab:'bot-blocker',cache:{}};function esc(v){const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML}function fmt(v){return (Number(v)||0).toLocaleString()}function pct(v){return (Number(v)||0).toFixed(1)}function shop(){return document.getElementById('shopInput').value.trim()}function days(){return document.getElementById('daysSelect').value}function panel(id){return document.getElementById('panel-'+id)}function msg(text,tone){const el=document.getElementById('msg');if(!text){el.className='msg';el.textContent='';return}el.className='msg show '+(tone==='error'?'bad':'ok');el.textContent=text}function loading(id,text){panel(id).innerHTML='<div class="load">'+esc(text)+'</div>'}async function api(path,opt){const res=await fetch(path,opt);const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'Request failed');return data}function needShop(){const s=shop();if(!s){msg('Enter a valid .myshopify.com domain first.','error');return''}return s}
+const API='${origin}';const state={tab:'bot-blocker',cache:{}};function esc(v){const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML}function fmt(v){return (Number(v)||0).toLocaleString()}function pct(v){return (Number(v)||0).toFixed(1)}function shop(){return document.getElementById('shopInput').value.trim()}function days(){return document.getElementById('daysSelect').value}function panel(id){return document.getElementById('panel-'+id)}function msg(text,tone){const el=document.getElementById('msg');if(!text){el.className='msg';el.textContent='';return}el.className='msg show '+(tone==='error'?'bad':'ok');el.textContent=text}function loading(id,text){panel(id).innerHTML='<div class="load">'+esc(text)+'</div>'}async function api(path,opt){const res=await fetch(path,opt);const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'Request failed');return data}function needShop(){const s=shop();if(!s){msg('Enter a valid .myshopify.com domain first.','error');return''}return s}function getAdminToken(){let token=sessionStorage.getItem('cs_admin_token')||'';if(!token){token=prompt('Enter Commerce Shield admin token to edit theme.liquid:')||'';if(token)sessionStorage.setItem('cs_admin_token',token)}return token}async function installPixelGuard(){const s=needShop();if(!s)return;const token=getAdminToken();if(!token){msg('Admin token required to edit theme.liquid.','error');return}try{msg('Installing pixel guard at the beginning of theme.liquid head...','success');const res=await fetch(API+'/api/admin/install-pixel-guard',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({shop:s})});const data=await res.json().catch(()=>({}));if(res.status===401||res.status===403){sessionStorage.removeItem('cs_admin_token')}if(!res.ok)throw new Error(data.error||'Unable to install pixel guard');state.cache={};msg(data.message||'Pixel guard installed.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to install pixel guard.','error')}}
 function metric(cls,label,value,hint){return '<div class="metric '+cls+'"><div class="k">'+esc(label)+'</div><div class="v">'+esc(value)+'</div><div class="h">'+esc(hint||'')+'</div></div>'}
 function switches(name,checked,title,copy){return '<label class="switch"><input type="checkbox" name="'+esc(name)+'"'+(checked?' checked':'')+'><div><strong>'+esc(title)+'</strong><span>'+esc(copy)+'</span></div></label>'}
 function findings(items){if(!(items||[]).length)return '<div class="card"><p class="sub">No hard-evidence findings were produced under the current conservative settings.</p></div>';return items.map(function(item){const tone=item.severity==='high'?'bad':item.severity==='medium'?'warn':'info';return '<div class="finding"><div class="row"><span class="chip '+tone+'">'+esc(item.severity)+'</span><span class="chip info">'+esc(item.category)+'</span><span class="sub">'+esc(item.location||'')+'</span><span class="sub">Impact '+pct(item.missedConversionPct||0)+'%</span></div><h4>'+esc(item.title)+'</h4><p>'+esc(item.evidence||item.fix||'')+'</p>'+(item.fix?'<p style="margin-top:8px"><strong>Fix:</strong> '+esc(item.fix)+'</p>':'')+'</div>'}).join('')}
@@ -2008,7 +2653,7 @@ function renderMri(data){const x=data.settings.conversionMri||{},f=data.funnel||
 async function saveSettings(event,section){event.preventDefault();const s=needShop();if(!s)return false;try{const fd=new FormData(event.currentTarget);const payload={shop:s};if(section==='intent'){payload.intent={sensitivity:Number(fd.get('sensitivity'))||62,includePaths:String(fd.get('includePaths')||'').split(/\\r?\\n/).filter(Boolean),rewardProductViews:fd.get('rewardProductViews')==='on',rewardCartSignals:fd.get('rewardCartSignals')==='on',rewardReturningSessions:fd.get('rewardReturningSessions')==='on',suppressBotsAndCrawlers:fd.get('suppressBotsAndCrawlers')==='on',conservativeMode:fd.get('conservativeMode')==='on'}}if(section==='appHealth'){payload.appHealth={detectLegacyScriptTags:fd.get('detectLegacyScriptTags')==='on',requireThemeAppExtensions:fd.get('requireThemeAppExtensions')==='on',detectDuplicatePixels:fd.get('detectDuplicatePixels')==='on',reviewInlineScripts:fd.get('reviewInlineScripts')==='on',conservativeFlagging:fd.get('conservativeFlagging')==='on'}}if(section==='conversionMri'){payload.conversionMri={conservativeMode:fd.get('conservativeMode')==='on',runAppChecks:fd.get('runAppChecks')==='on',runContentChecks:fd.get('runContentChecks')==='on',runAdaChecks:fd.get('runAdaChecks')==='on',runSeoChecks:fd.get('runSeoChecks')==='on',runSpeedChecks:fd.get('runSpeedChecks')==='on'}}await api(API+'/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});state.cache={};msg('Settings saved. Reloading the active tab.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to save settings.','error')}return false}
 function activateTab(tab){state.tab=tab;document.querySelectorAll('.tabs button').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-tab')===tab)});document.querySelectorAll('.panel').forEach(function(p){p.classList.toggle('active',p.id==='panel-'+tab)});refreshActive(false)}
 async function refreshActive(force){msg('','success');try{if(state.tab==='bot-blocker')await loadBot(force);if(state.tab==='user-intent')await loadIntent(force);if(state.tab==='shopify-app-health')await loadHealth(force);if(state.tab==='conversion-mri')await loadMri(force)}catch(error){msg(error.message||'Unable to load data.','error')}}
-window.activateTab=activateTab;window.refreshActive=refreshActive;window.saveSettings=saveSettings;if(document.getElementById('shopInput').value){setTimeout(function(){refreshActive(true)},180)}
+window.activateTab=activateTab;window.refreshActive=refreshActive;window.saveSettings=saveSettings;window.installPixelGuard=installPixelGuard;if(document.getElementById('shopInput').value){setTimeout(function(){refreshActive(true)},180)}
 <\/script>
 </body>
 </html>`;

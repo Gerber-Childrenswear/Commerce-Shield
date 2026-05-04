@@ -2001,9 +2001,13 @@ async function handleRecentVisits(url, env, corsHeaders) {
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 200);
   if (!shop) throw new HttpError("Missing shop param", 400);
 
+  const botsOnly = url.searchParams.get("bots") !== "0";
   const recent = await env.DB.prepare(
-    `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
-     FROM visits WHERE shop = ? ORDER BY id DESC LIMIT ?`
+    botsOnly
+      ? `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
+         FROM visits WHERE shop = ? AND is_bot = 1 ORDER BY id DESC LIMIT ?`
+      : `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
+         FROM visits WHERE shop = ? ORDER BY id DESC LIMIT ?`
   ).bind(shop, limit).all();
 
   return jsonResponse({ visits: recent.results || [] }, 200, corsHeaders);
@@ -2641,7 +2645,7 @@ async function loadDashboard() {
   const base = window.location.origin;
   const [dashRes, recentRes] = await Promise.all([
     fetch(base + '/api/dashboard?shop=' + encodeURIComponent(shop) + '&days=' + days),
-    fetch(base + '/api/recent?shop=' + encodeURIComponent(shop) + '&limit=50')
+    fetch(base + '/api/recent?shop=' + encodeURIComponent(shop) + '&limit=25&bots=1')
   ]);
 
   const dash = await dashRes.json();
@@ -2678,7 +2682,7 @@ function renderDashboard(dash, recent) {
   html += '</tbody></table></div>';
 
   // Recent visits
-  html += '<div class="table-card"><h3>Recent Visits</h3><table><thead><tr><th>Time</th><th>Type</th><th>Score</th><th>Confidence</th><th>Source</th><th>Page</th></tr></thead><tbody>';
+  html += '<div class="table-card"><h3>Recent Bot Visits</h3><table><thead><tr><th>Time</th><th>Type</th><th>Score</th><th>Confidence</th><th>Source</th><th>Page</th></tr></thead><tbody>';
   for (const v of (recent.visits || []).slice(0, 25)) {
     const type = v.is_coupon_bot ? 'coupon' : v.is_legitimate ? 'legit' : v.is_bot ? 'bot' : 'human';
     const typeLabel = v.is_coupon_bot ? 'Coupon Bot' : v.is_legitimate ? 'Crawler' : v.is_bot ? 'Bot' : 'Human';
@@ -2825,7 +2829,7 @@ async function loadData() {
   try {
     const [dashRes, recentRes] = await Promise.all([
       fetch(API + '/api/dashboard?shop=' + encodeURIComponent(shop) + '&days=' + days),
-      fetch(API + '/api/recent?shop=' + encodeURIComponent(shop) + '&limit=50')
+      fetch(API + '/api/recent?shop=' + encodeURIComponent(shop) + '&limit=25&bots=1')
     ]);
     const dash = await dashRes.json();
     const recent = await recentRes.json();
@@ -2864,7 +2868,7 @@ function render(dash, recent) {
   if (!dash.sources?.length) h += '<tr><td colspan="4" style="text-align:center;color:#8c9196">No data yet</td></tr>';
   h += '</tbody></table></div>';
 
-  h += '<div class="card"><h3>Recent Visits</h3><table><thead><tr><th>Time</th><th>Type</th><th>Score</th><th>Confidence</th><th>Source</th></tr></thead><tbody>';
+  h += '<div class="card"><h3>Recent Bot Visits</h3><table><thead><tr><th>Time</th><th>Type</th><th>Score</th><th>Confidence</th><th>Source</th></tr></thead><tbody>';
   for (const v of (recent.visits||[]).slice(0,20)) {
     const type = v.is_coupon_bot?'coupon':v.is_legitimate?'legit':v.is_bot?'bot':'human';
     const lbl = v.is_coupon_bot?'Coupon Bot':v.is_legitimate?'Crawler':v.is_bot?'Bot':'Human';
@@ -2875,7 +2879,7 @@ function render(dash, recent) {
     h += '<td><span class="badge '+conf+'">'+(v.confidence||'low')+'</span></td>';
     h += '<td>'+esc(v.source||'')+'</td></tr>';
   }
-  if (!recent.visits?.length) h += '<tr><td colspan="5" style="text-align:center;color:#8c9196">No visits recorded yet</td></tr>';
+  if (!recent.visits?.length) h += '<tr><td colspan="5" style="text-align:center;color:#8c9196">No bot visits recorded yet</td></tr>';
   h += '</tbody></table></div></div>';
 
   document.getElementById('content').innerHTML = h;

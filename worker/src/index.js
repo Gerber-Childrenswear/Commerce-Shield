@@ -1610,7 +1610,54 @@ async function handleStats(request, env, corsHeaders, ctx) {
   if (!normalizedShop) throw new HttpError("Invalid shop", 400);
 
   const today = new Date().toISOString().split("T")[0];
-  const pixelProtected = isBot && confidence === "high" && !isLegitimate ? 1 : 0;
+
+  // --- Server-side signals from Cloudflare (free, no Bot Management needed) ---
+  // cf.botManagement is only on Enterprise; cf.threatScore and cf.asn are on all plans.
+  const cf = request.cf || {};
+  let serverScore = Number(botScore) || 0;
+  let serverConfidence = confidence || "low";
+  let serverIsBot = isBot === true;
+  const cfReasons = [];
+
+  // Cloudflare threat score: 0–100. Score > 10 = suspicious, > 30 = high threat.
+  const cfThreat = Number(cf.threatScore) || 0;
+  if (cfThreat > 30) {
+    serverScore = Math.max(serverScore, 0.9);
+    serverIsBot = true;
+    serverConfidence = "high";
+    cfReasons.push("cf_threat_" + cfThreat);
+  } else if (cfThreat > 10) {
+    serverScore = Math.max(serverScore, Math.min(1, serverScore + 0.25));
+    cfReasons.push("cf_threat_" + cfThreat);
+  }
+
+  // Known datacenter/VPS/hosting ASNs — confirmed scrapers run in these.
+  // 45102=Alibaba, 396982=Google Cloud, 16509=AWS, 14618=AWS, 8075=Azure,
+  // 13335=Cloudflare, 20473=Choopa/Vultr, 19527=Google, 15169=Google,
+  // 36351=SoftLayer/IBM, 46606=Unified Layer, 32244=Liquid Web,
+  // 55967=Baidu, 38365=Baidu, 134238=Tencent, 132203=Tencent,
+  // 55286=B2 Net Solutions, 53667=FranTech, 209=Qwest/CenturyLink hosting.
+  const datacenterASNs = new Set([
+    45102, 396982, 16509, 14618, 8075, 20473, 19527, 15169,
+    36351, 46606, 32244, 55967, 38365, 134238, 132203,
+    55286, 53667, 35913, 40021, 62567, 63949, 24940, 51167,
+    9009, 49815, 60781, 34119, 197695, 206728, 48693,
+  ]);
+  const cfAsn = Number(cf.asn) || 0;
+  if (cfAsn && datacenterASNs.has(cfAsn)) {
+    serverScore = Math.max(serverScore, Math.min(1, serverScore + 0.45));
+    cfReasons.push("datacenter_asn_" + cfAsn);
+    if (serverScore >= 0.9) {
+      serverIsBot = true;
+      serverConfidence = "high";
+    }
+  }
+
+  // Combine with client score — take the higher of the two.
+  const finalIsBot = serverIsBot;
+  const finalBotScore = serverScore;
+  const finalConfidence = serverConfidence;
+  const pixelProtected = finalIsBot && finalConfidence === "high" && !isLegitimate ? 1 : 0;
 
   // Batch both writes into a single round-trip — halves the D1 latency on the hot path.
   await env.DB.batch([
@@ -1619,9 +1666,9 @@ async function handleStats(request, env, corsHeaders, ctx) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       normalizedShop,
-      isBot ? 1 : 0,
-      Number(botScore) || 0,
-      sanitizeString(confidence, 20) || "low",
+      finalIsBot ? 1 : 0,
+      Number(finalBotScore) || 0,
+      sanitizeString(finalConfidence, 20) || "low",
       isMobile ? 1 : 0,
       isLegitimate ? 1 : 0,
       isCouponBot ? 1 : 0,
@@ -1641,12 +1688,12 @@ async function handleStats(request, env, corsHeaders, ctx) {
     ).bind(
       normalizedShop,
       today,
-      isBot ? 0 : 1,
-      isBot ? 1 : 0,
+      finalIsBot ? 0 : 1,
+      finalIsBot ? 1 : 0,
       isCouponBot ? 1 : 0,
       pixelProtected,
-      isBot ? 0 : 1,
-      isBot ? 1 : 0,
+      finalIsBot ? 0 : 1,
+      finalIsBot ? 1 : 0,
       isCouponBot ? 1 : 0,
       pixelProtected,
     ),
@@ -1964,21 +2011,85 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled) {
       score += 0.08;
       reasons.push("empty_languages");
     }
-    // Frozen/stale Chrome version — real Chrome auto-updates. Chrome < 130 is 18+ months
-    // out of date (Chrome 130 shipped Sep 2024). Confirmed scrapers use /125, /123, /120, /88.
+
+    // Frozen/stale Chrome version — real Chrome auto-updates.
+    // Chrome < 130 = 18+ months out of date (shipped Sep 2024).
     const chromeVerMatch = ua.match(/Chrome\/(\d+)\./);
     if (chromeVerMatch) {
       const chromeVer = parseInt(chromeVerMatch[1], 10);
       if (chromeVer < 100) {
-        // Severely stale (Chrome/88 etc) — very likely bot or Selenium
         score = Math.max(score, 0.92);
         reasons.push("stale_chrome_version");
       } else if (chromeVer < 130) {
-        // Moderately stale (Chrome/120–129) — confirmed scrapers use these
         score += 0.35;
         reasons.push("stale_chrome_version");
       }
     }
+
+    // --- Browser environment fingerprinting ---
+    // Real Chrome always exposes window.chrome. Headless/Playwright/Puppeteer
+    // often omit it or have an incomplete stub.
+    if (/Chrome\//i.test(ua) && !lowerUa.includes('chromium')) {
+      if (typeof window.chrome === 'undefined' || window.chrome === null) {
+        score += 0.35;
+        reasons.push("chrome_ua_no_chrome_obj");
+      }
+    }
+
+    // Headless Chrome has zero plugins. Real Chrome always has at least one
+    // (PDF viewer). Only applies to desktop UA strings, not mobile.
+    try {
+      if (navigator.plugins && navigator.plugins.length === 0 &&
+          /Chrome|Safari/i.test(ua) && !/Mobile|Android|iPhone|iPad/i.test(ua)) {
+        score += 0.3;
+        reasons.push("no_plugins");
+      }
+    } catch {}
+
+    // outerWidth/outerHeight are 0 in headless Chrome unless explicitly set.
+    try {
+      if (typeof window.outerWidth !== 'undefined' &&
+          window.outerWidth === 0 && window.outerHeight === 0) {
+        score += 0.35;
+        reasons.push("zero_outer_dimensions");
+      }
+    } catch {}
+
+    // Unrealistically small screen.
+    try {
+      if (typeof screen !== 'undefined' &&
+          (screen.width < 100 || screen.height < 100)) {
+        score += 0.4;
+        reasons.push("tiny_screen");
+      }
+    } catch {}
+
+    // WebGL software renderer — headless Chrome uses SwiftShader.
+    // Real GPUs never identify as software renderers.
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (gl) {
+        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+        if (dbg) {
+          const renderer = (gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '').toLowerCase();
+          if (/swiftshader|llvmpipe|virtualbox|vmware|mesa|softpipe/i.test(renderer)) {
+            score = Math.max(score, 0.88);
+            reasons.push("software_webgl_renderer");
+          }
+        }
+      }
+    } catch {}
+
+    // Platform/UA mismatch — scrapers hardcode "Macintosh" UA on non-Mac machines.
+    try {
+      const claimedMac = /Macintosh/i.test(ua);
+      const platformMac = /Mac/i.test(navigator.platform || '');
+      if (claimedMac && !platformMac && navigator.platform) {
+        score += 0.3;
+        reasons.push("platform_ua_mismatch");
+      }
+    } catch {}
 
     score = Math.min(1, score);
     const highConfidence = score >= 0.9;
@@ -2002,8 +2113,9 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled) {
   window.__CommerceShieldPixelGuard = state;
 
   // Allow borderline scores (0.25–0.89) through for behavioral check.
-  // Clearly human visitors (score < 0.25) exit immediately.
-  if (!state.suppressing && decision.botScore < 0.25) return;
+  // Exit only if clearly human: no fingerprinting signals at all (score 0).
+  // All visitors with any signal go through the behavioral check below.
+  if (!state.suppressing && decision.botScore === 0) return;
 
   const blockedHostSuffixes = [
     "facebook.com",

@@ -30,6 +30,8 @@ const SHOPIFY_THEME_INSTALL_REQUIRED_SCOPES = ["read_themes", "write_themes"];
 const PIXEL_GUARD_MARKER = "Commerce Shield Pixel Guard";
 const INTENT_HIGH_TIERS = new Set(["high_intent", "purchase_ready", "customer"]);
 const INTENT_MEDIUM_TIERS = new Set(["considering", "interested"]);
+const DEFAULT_HUMAN_VISIT_SAMPLE_RATE = 0.05;
+const DEFAULT_SUSPICIOUS_VISIT_THRESHOLD = 0.35;
 const DATACENTER_ASNS = new Set([
   // Major cloud/datacenter providers frequently used by scraping traffic.
   14618, 16509, 8075, 15169, 19527, 20473, 396982, 45102,
@@ -1709,23 +1711,26 @@ async function handleStats(request, env, corsHeaders, ctx) {
   const finalConfidence = cfRisk.confidence;
   const pixelProtected = finalIsBot && finalConfidence === "high" && !isLegitimate ? 1 : 0;
 
-  // Batch both writes into a single round-trip — halves the D1 latency on the hot path.
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO visits (shop, is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      normalizedShop,
-      finalIsBot ? 1 : 0,
-      Number(finalBotScore) || 0,
-      sanitizeString(finalConfidence, 20) || "low",
-      isMobile ? 1 : 0,
-      isLegitimate ? 1 : 0,
-      isCouponBot ? 1 : 0,
-      sanitizeString(source, 80) || "direct",
-      sanitizeString(page, 500),
-      sanitizeString(ua, 200),
-    ),
+  const envSampleRate = Number(env.HUMAN_VISIT_SAMPLE_RATE);
+  const humanVisitSampleRate = Number.isFinite(envSampleRate)
+    ? Math.min(1, Math.max(0, envSampleRate))
+    : DEFAULT_HUMAN_VISIT_SAMPLE_RATE;
+  const envSuspiciousThreshold = Number(env.SUSPICIOUS_VISIT_THRESHOLD);
+  const suspiciousThreshold = Number.isFinite(envSuspiciousThreshold)
+    ? Math.min(1, Math.max(0, envSuspiciousThreshold))
+    : DEFAULT_SUSPICIOUS_VISIT_THRESHOLD;
+
+  // Free-plan D1 optimization: keep detailed visit rows for bots/suspicious traffic,
+  // sample low-risk humans, while keeping daily totals exact.
+  const shouldPersistVisitRow =
+    finalIsBot ||
+    isCouponBot === true ||
+    isLegitimate === true ||
+    finalBotScore >= suspiciousThreshold ||
+    Math.random() < humanVisitSampleRate;
+
+  // Batch writes into one round-trip. `daily_stats` is always exact.
+  const statements = [
     env.DB.prepare(
       `INSERT INTO daily_stats (shop, date, total_visits, human_visits, bot_visits, coupon_bots, pixels_protected)
        VALUES (?, ?, 1, ?, ?, ?, ?)
@@ -1747,7 +1752,29 @@ async function handleStats(request, env, corsHeaders, ctx) {
       isCouponBot ? 1 : 0,
       pixelProtected,
     ),
-  ]);
+  ];
+
+  if (shouldPersistVisitRow) {
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO visits (shop, is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        normalizedShop,
+        finalIsBot ? 1 : 0,
+        Number(finalBotScore) || 0,
+        sanitizeString(finalConfidence, 20) || "low",
+        isMobile ? 1 : 0,
+        isLegitimate ? 1 : 0,
+        isCouponBot ? 1 : 0,
+        sanitizeString(source, 80) || "direct",
+        sanitizeString(page, 500),
+        sanitizeString(ua, 200),
+      )
+    );
+  }
+
+  await env.DB.batch(statements);
 
   // Probabilistic cleanup — runs on ~0.5% of requests instead of every write.
   // At 500k writes/day this still prunes ~2,500 times per day, far more than needed.

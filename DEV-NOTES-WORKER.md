@@ -56,3 +56,40 @@ If we only edit this repository, Worker production behavior at `commerce-shield.
 - `main` points to the expected file
 - Deploy command is documented and reproducible
 - `shopify.app.toml` URLs match deployed Worker routes
+
+## D1 migrations
+
+When new tables are added, re-run the DB init command to apply them:
+
+```powershell
+npm run worker:db:init
+```
+
+Or apply individually with Wrangler:
+
+```powershell
+cd worker
+npx wrangler d1 execute commerce-shield-db --file=schema.sql
+```
+
+### Crawler Allowlist table (added 2026-05)
+
+If upgrading an existing D1 instance, run the following to add the `allowed_crawlers` table without affecting existing data:
+
+```sql
+CREATE TABLE IF NOT EXISTS allowed_crawlers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  shop TEXT NOT NULL,
+  company TEXT NOT NULL,
+  crawler_name TEXT NOT NULL,
+  ua_pattern TEXT NOT NULL DEFAULT '',
+  contact_email TEXT NOT NULL DEFAULT '',
+  purpose TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  token TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_allowed_crawlers_shop_status ON allowed_crawlers(shop, status);
+CREATE INDEX IF NOT EXISTS idx_allowed_crawlers_token ON allowed_crawlers(token);
+```

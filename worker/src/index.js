@@ -159,6 +159,15 @@ export default {
       if (url.pathname === "/cs-pixel-guard.js" && request.method === "GET") {
         return servePixelGuard(url);
       }
+      if (url.pathname === "/crawler-verify" && request.method === "GET") {
+        return serveCrawlerVerifyPage(url);
+      }
+      if (url.pathname === "/api/crawler/register" && request.method === "POST") {
+        return handleCrawlerRegister(request, env, corsHeaders);
+      }
+      if (url.pathname === "/api/admin/crawlers") {
+        return handleAdminCrawlers(request, url, env, corsHeaders);
+      }
       if (url.pathname === "/" || url.pathname === "/app" || url.pathname.startsWith("/app/")) {
         return serveEmbeddedAdmin(url);
       }
@@ -1698,6 +1707,142 @@ function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidenc
   };
 }
 
+// ---------------------------------------------------------------------------
+// Crawler Allowlist — helpers
+// ---------------------------------------------------------------------------
+const CRAWLER_REGISTER_RATE_LIMIT = 5;
+
+function sanitizeUaPattern(value) {
+  // Allow only alphanumeric characters, spaces, and a small set of common UA
+  // delimiters. Explicitly excludes regex metacharacters ([]{}\^$*+?.|) to
+  // prevent any future use of this string in a regex context from being abused.
+  const candidate = sanitizeString(value, 120);
+  if (!/^[\w\s./+\-@():,;!?#%&=]+$/.test(candidate)) return "";
+  return candidate;
+}
+
+function sanitizeEmail(value) {
+  const candidate = sanitizeString(value, 120).toLowerCase();
+  return /^[^@\s]{1,64}@[^@\s]{1,253}$/.test(candidate) ? candidate : "";
+}
+
+function crawlerUaMatches(approvedPattern, ua) {
+  if (!approvedPattern || !ua) return false;
+  return ua.toLowerCase().includes(approvedPattern.toLowerCase());
+}
+
+async function checkAllowedCrawler(env, shop, ua, crawlerToken) {
+  if (!ua && !crawlerToken) return false;
+
+  let row;
+  if (crawlerToken) {
+    row = await env.DB.prepare(
+      `SELECT id FROM allowed_crawlers WHERE shop = ? AND status = 'approved' AND token = ? LIMIT 1`
+    ).bind(shop, crawlerToken).first();
+    if (row) return true;
+  }
+
+  if (ua) {
+    const rows = await env.DB.prepare(
+      `SELECT ua_pattern FROM allowed_crawlers WHERE shop = ? AND status = 'approved' AND ua_pattern != '' LIMIT 50`
+    ).bind(shop).all();
+    for (const r of rows.results || []) {
+      if (crawlerUaMatches(r.ua_pattern, ua)) return true;
+    }
+  }
+
+  return false;
+}
+
+function extractCrawlerToken(page) {
+  if (!page) return "";
+  try {
+    const u = new URL(page, "https://x");
+    const token = u.searchParams.get("_cs") || "";
+    return sanitizeString(token, 40);
+  } catch {
+    return "";
+  }
+}
+
+async function handleCrawlerRegister(request, env, corsHeaders) {
+  const ip = extractIp(request);
+  await applyRateLimit(env, "crawler_register", ip, CRAWLER_REGISTER_RATE_LIMIT, 3600);
+
+  const { body } = await parseJsonRequest(request, 8 * 1024);
+  const shop = normalizeShopDomain(body.shop);
+  if (!shop) throw new HttpError("Missing or invalid shop", 400);
+
+  const company = sanitizeString(body.company, 120);
+  const crawlerName = sanitizeString(body.crawlerName, 120);
+  const uaPattern = sanitizeUaPattern(body.uaPattern || "");
+  const contactEmail = sanitizeEmail(body.contactEmail || "");
+  const purpose = sanitizeString(body.purpose, 500);
+
+  if (!company) throw new HttpError("Company name is required", 400);
+  if (!crawlerName) throw new HttpError("Crawler name is required", 400);
+  if (!uaPattern) throw new HttpError("User agent pattern is required and may only contain standard characters", 400);
+  if (!contactEmail) throw new HttpError("A valid contact email is required", 400);
+  if (!purpose) throw new HttpError("Purpose is required", 400);
+
+  // Prevent duplicate pending registrations for the same UA pattern.
+  const existing = await env.DB.prepare(
+    `SELECT id FROM allowed_crawlers WHERE shop = ? AND ua_pattern = ? AND status IN ('pending', 'approved') LIMIT 1`
+  ).bind(shop, uaPattern).first();
+  if (existing) throw new HttpError("A registration with this user agent pattern is already pending or approved", 409);
+
+  await env.DB.prepare(
+    `INSERT INTO allowed_crawlers (shop, company, crawler_name, ua_pattern, contact_email, purpose, status, token)
+     VALUES (?, ?, ?, ?, ?, ?, 'pending', '')`
+  ).bind(shop, company, crawlerName, uaPattern, contactEmail, purpose).run();
+
+  return jsonResponse({ ok: true, message: "Registration received. The store admin will review your request." }, 201, corsHeaders);
+}
+
+async function handleAdminCrawlers(request, url, env, corsHeaders) {
+  requireWorkerAdmin(request, env);
+
+  if (request.method === "GET") {
+    const shop = getRequiredShop(url);
+    const shareLink = `${url.origin}/crawler-verify?shop=${encodeURIComponent(shop)}`;
+    const rows = await env.DB.prepare(
+      `SELECT id, company, crawler_name, ua_pattern, contact_email, purpose, status, token, created_at, updated_at
+       FROM allowed_crawlers WHERE shop = ? ORDER BY created_at DESC LIMIT 200`
+    ).bind(shop).all();
+    return jsonResponse({ shop, shareLink, crawlers: rows.results || [] }, 200, corsHeaders);
+  }
+
+  if (request.method === "POST") {
+    const { body } = await parseJsonRequest(request, 4 * 1024);
+    const shop = normalizeShopDomain(body.shop);
+    if (!shop) throw new HttpError("Missing or invalid shop", 400);
+    const id = Number(body.id);
+    if (!Number.isFinite(id) || id <= 0) throw new HttpError("Missing or invalid id", 400);
+    const action = sanitizeString(body.action, 20);
+    if (action !== "approve" && action !== "reject") throw new HttpError("action must be approve or reject", 400);
+
+    if (action === "approve") {
+      const token = crypto.randomUUID().replace(/-/g, "");
+      await env.DB.prepare(
+        `UPDATE allowed_crawlers SET status = 'approved', token = ?, updated_at = datetime('now')
+         WHERE id = ? AND shop = ?`
+      ).bind(token, id, shop).run();
+      const row = await env.DB.prepare(
+        `SELECT id, company, crawler_name, ua_pattern, token, status FROM allowed_crawlers WHERE id = ? AND shop = ? LIMIT 1`
+      ).bind(id, shop).first();
+      return jsonResponse({ ok: true, crawler: row }, 200, corsHeaders);
+    }
+
+    // reject
+    await env.DB.prepare(
+      `UPDATE allowed_crawlers SET status = 'rejected', updated_at = datetime('now') WHERE id = ? AND shop = ?`
+    ).bind(id, shop).run();
+    return jsonResponse({ ok: true }, 200, corsHeaders);
+  }
+
+  throw new HttpError("Method not allowed", 405);
+}
+
 async function handleStats(request, env, corsHeaders, ctx) {
   const { body } = await parseJsonRequest(request);
   const { shop, isBot, botScore, confidence, isMobile, isLegitimate, isCouponBot, source, page, ua } = body;
@@ -1707,12 +1852,22 @@ async function handleStats(request, env, corsHeaders, ctx) {
 
   const today = new Date().toISOString().split("T")[0];
 
+  // Server-side crawler allowlist check — overrides client-supplied isLegitimate if the
+  // UA or token matches an admin-approved crawler registration.
+  const crawlerToken = extractCrawlerToken(page);
+  const sanitizedUa = sanitizeString(ua, 512);
+  // Only query the allowlist when there is a token or when the client has already
+  // flagged this as a bot/legitimate — avoids a DB round-trip on every human visit.
+  const needsAllowlistCheck = isLegitimate === true || isBot === true || !!crawlerToken;
+  const resolvedIsLegitimate = isLegitimate === true ||
+    (needsAllowlistCheck && await checkAllowedCrawler(env, normalizedShop, sanitizedUa, crawlerToken));
+
   // Cloudflare-native edge enrichment (threat score, botManagement, ASN/org hints, JA3/JA4).
   const cfRisk = applyCloudflareRiskSignals(request, botScore, isBot, confidence);
   const finalIsBot = cfRisk.isBot;
   const finalBotScore = cfRisk.score;
   const finalConfidence = cfRisk.confidence;
-  const pixelProtected = finalIsBot && finalConfidence === "high" && !isLegitimate ? 1 : 0;
+  const pixelProtected = finalIsBot && finalConfidence === "high" && !resolvedIsLegitimate ? 1 : 0;
 
   const envSampleRate = Number(env.HUMAN_VISIT_SAMPLE_RATE);
   const humanVisitSampleRate = Number.isFinite(envSampleRate)
@@ -1728,7 +1883,7 @@ async function handleStats(request, env, corsHeaders, ctx) {
   const shouldPersistVisitRow =
     finalIsBot ||
     isCouponBot === true ||
-    isLegitimate === true ||
+    resolvedIsLegitimate ||
     finalBotScore >= suspiciousThreshold ||
     Math.random() < humanVisitSampleRate;
 
@@ -1768,7 +1923,7 @@ async function handleStats(request, env, corsHeaders, ctx) {
         Number(finalBotScore) || 0,
         sanitizeString(finalConfidence, 20) || "low",
         isMobile ? 1 : 0,
-        isLegitimate ? 1 : 0,
+        resolvedIsLegitimate ? 1 : 0,
         isCouponBot ? 1 : 0,
         sanitizeString(source, 80) || "direct",
         sanitizeString(page, 500),
@@ -2011,6 +2166,13 @@ async function handleRecentVisits(url, env, corsHeaders) {
   ).bind(shop, limit).all();
 
   return jsonResponse({ visits: recent.results || [] }, 200, corsHeaders);
+}
+
+function serveCrawlerVerifyPage(url) {
+  const shop = normalizeShopDomain(url.searchParams.get("shop") || "");
+  return new Response(buildCrawlerVerifyHTML(shop), {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
 }
 
 function serveEmbeddedAdmin(url) {
@@ -2939,11 +3101,13 @@ function buildEmbeddedAdminHTML(shop, origin) {
     <button data-tab="user-intent" onclick="activateTab('user-intent')">User-Intent</button>
     <button data-tab="shopify-app-health" onclick="activateTab('shopify-app-health')">Shopify App Health</button>
     <button data-tab="conversion-mri" onclick="activateTab('conversion-mri')">Conversion MRI</button>
+    <button data-tab="crawler-allowlist" onclick="activateTab('crawler-allowlist')">Crawler Allowlist</button>
   </div>
   <section id="panel-bot-blocker" class="panel active"><div class="load">Load a shop to inspect storefront traffic and bot protection.</div></section>
   <section id="panel-user-intent" class="panel"><div class="load">User-intent loads after a valid shop is entered.</div></section>
   <section id="panel-shopify-app-health" class="panel"><div class="load">App health needs a Worker-side Admin token and the theme/script scopes.</div></section>
   <section id="panel-conversion-mri" class="panel"><div class="load">Conversion MRI waits for enough evidence before surfacing diagnostics.</div></section>
+  <section id="panel-crawler-allowlist" class="panel"><div class="load">Load a shop to manage crawler registrations.</div></section>
 </div>
 <script>
 const API='${origin}';const state={tab:'bot-blocker',cache:{}};function esc(v){const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML}function fmt(v){return (Number(v)||0).toLocaleString()}function pct(v){return (Number(v)||0).toFixed(1)}function shop(){return document.getElementById('shopInput').value.trim()}function days(){return document.getElementById('daysSelect').value}function panel(id){return document.getElementById('panel-'+id)}function msg(text,tone){const el=document.getElementById('msg');if(!text){el.className='msg';el.textContent='';return}el.className='msg show '+(tone==='error'?'bad':'ok');el.textContent=text}function loading(id,text){panel(id).innerHTML='<div class="load">'+esc(text)+'</div>'}async function api(path,opt){const res=await fetch(path,opt);const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'Request failed');return data}function needShop(){const s=shop();if(!s){msg('Enter a valid .myshopify.com domain first.','error');return''}return s}function getAdminToken(){let token=sessionStorage.getItem('cs_admin_token')||'';if(!token){token=prompt('Enter Commerce Shield admin token to edit theme.liquid:')||'';if(token)sessionStorage.setItem('cs_admin_token',token)}return token}async function installPixelGuard(){const s=needShop();if(!s)return;const token=getAdminToken();if(!token){msg('Admin token required to edit theme.liquid.','error');return}try{msg('Installing pixel guard at the beginning of theme.liquid head...','success');const res=await fetch(API+'/api/admin/install-pixel-guard',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({shop:s})});const data=await res.json().catch(()=>({}));if(res.status===401||res.status===403){sessionStorage.removeItem('cs_admin_token')}if(!res.ok)throw new Error(data.error||'Unable to install pixel guard');state.cache={};msg(data.message||'Pixel guard installed.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to install pixel guard.','error')}}
@@ -2959,10 +3123,171 @@ function renderHealth(data){const x=data.settings.appHealth||{},status=data.stat
 async function loadMri(force){const s=needShop();if(!s)return;const key='mri:'+s;if(!force&&state.cache[key])return renderMri(state.cache[key]);loading('conversion-mri','Building conservative conversion diagnostics...');const data=await api(API+'/api/admin/conversion-mri?shop='+encodeURIComponent(s));state.cache[key]=data;renderMri(data)}
 function renderMri(data){const x=data.settings.conversionMri||{},f=data.funnel||{};let h='<div class="head"><div><h2>Conversion MRI</h2><p>Conversion MRI ties funnel drop-off to conservative technical evidence. It would rather miss an issue than recommend a noisy or harmful fix path.</p></div><span class="chip '+(data.auditStatus==='critical'?'bad':data.auditStatus==='warning'?'warn':data.auditStatus==='limited'||data.auditStatus==='disconnected'?'info':'ok')+'">'+esc(data.auditStatus||'healthy')+'</span></div>';h+='<div class="grid cards">'+metric('warn','Missed conversion',pct(data.totalMissedConversionPct||0)+'%','Estimated recoverable conversion from the current evidence-backed findings.')+metric('','Product views',fmt(f.product_view||0),'Distinct profiles reaching product detail pages.')+metric('','Add to cart',fmt(f.add_to_cart||0),'Distinct profiles progressing into the cart.')+metric('','Checkout start',fmt(f.checkout_start||0),'Distinct profiles reaching checkout.')+'</div>';h+=findings(data.diagnostics||[]);h+='<div class="card"><h3>Conversion MRI Controls</h3><form onsubmit="return saveSettings(event,\\'conversionMri\\')">'+switches('conservativeMode',x.conservativeMode,'Conservative mode','Limit the report to the strongest few findings.')+switches('runAppChecks',x.runAppChecks,'App conflict checks','Include store-health findings that plausibly hurt conversion.')+switches('runContentChecks',x.runContentChecks,'Content checks','Allow PDP and cart-content friction diagnostics when ratios are clearly weak.')+switches('runAdaChecks',x.runAdaChecks,'ADA checks','Only surface layout-level accessibility issues with direct evidence.')+switches('runSeoChecks',x.runSeoChecks,'SEO checks','Inspect canonical and title output in the main layout.')+switches('runSpeedChecks',x.runSpeedChecks,'Site speed checks','Use script density and risky inline patterns in the MRI model.')+'<p style="margin-top:14px"><button type="submit">Save Conversion MRI Settings</button></p></form></div><div class="card"><p class="sub">Conversion MRI is intentionally biased toward under-reporting. Weak evidence stays out of the report.</p></div>';panel('conversion-mri').innerHTML=h}
 async function saveSettings(event,section){event.preventDefault();const s=needShop();if(!s)return false;try{const fd=new FormData(event.currentTarget);const payload={shop:s};if(section==='intent'){payload.intent={sensitivity:Number(fd.get('sensitivity'))||62,includePaths:String(fd.get('includePaths')||'').split(/\\r?\\n/).filter(Boolean),rewardProductViews:fd.get('rewardProductViews')==='on',rewardCartSignals:fd.get('rewardCartSignals')==='on',rewardReturningSessions:fd.get('rewardReturningSessions')==='on',suppressBotsAndCrawlers:fd.get('suppressBotsAndCrawlers')==='on',conservativeMode:fd.get('conservativeMode')==='on'}}if(section==='appHealth'){payload.appHealth={detectLegacyScriptTags:fd.get('detectLegacyScriptTags')==='on',requireThemeAppExtensions:fd.get('requireThemeAppExtensions')==='on',detectDuplicatePixels:fd.get('detectDuplicatePixels')==='on',reviewInlineScripts:fd.get('reviewInlineScripts')==='on',conservativeFlagging:fd.get('conservativeFlagging')==='on'}}if(section==='conversionMri'){payload.conversionMri={conservativeMode:fd.get('conservativeMode')==='on',runAppChecks:fd.get('runAppChecks')==='on',runContentChecks:fd.get('runContentChecks')==='on',runAdaChecks:fd.get('runAdaChecks')==='on',runSeoChecks:fd.get('runSeoChecks')==='on',runSpeedChecks:fd.get('runSpeedChecks')==='on'}}await api(API+'/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});state.cache={};msg('Settings saved. Reloading the active tab.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to save settings.','error')}return false}
+async function loadCrawlers(force){const s=needShop();if(!s)return;const token=getAdminToken();if(!token){panel('crawler-allowlist').innerHTML='<div class="card"><p class="sub">Admin token required to manage crawler registrations.</p></div>';return}const key='crawlers:'+s;if(!force&&state.cache[key])return renderCrawlers(state.cache[key]);loading('crawler-allowlist','Loading crawler registrations...');try{const data=await api(API+'/api/admin/crawlers?shop='+encodeURIComponent(s),{headers:{'Authorization':'Bearer '+token}});state.cache[key]=data;renderCrawlers(data)}catch(error){panel('crawler-allowlist').innerHTML='<div class="card"><p class="sub">'+esc(error.message||'Unable to load crawler registrations.')+'</p></div>'}}
+function renderCrawlers(data){const link=esc(data.shareLink||'');const pending=(data.crawlers||[]).filter(function(c){return c.status==='pending'});const approved=(data.crawlers||[]).filter(function(c){return c.status==='approved'});const rejected=(data.crawlers||[]).filter(function(c){return c.status==='rejected'});let h='<div class="head"><div><h2>Crawler Allowlist</h2><p>Share the registration link with any third party whose crawler should access the site without affecting analytics. Approved crawlers are automatically identified and excluded from marketing metrics.</p></div><span class="chip info">'+fmt(pending.length)+' pending</span></div>';h+='<div class="card" style="margin-bottom:16px"><h3>Shareable Registration Link</h3><p class="sub" style="margin:8px 0 10px">Send this URL to any third party operating a legitimate crawler. They fill in a short form and you review the request here.</p><div style="display:flex;gap:8px;align-items:center"><input type="text" value="'+link+'" readonly style="flex:1;font-family:monospace;font-size:12px" id="shareLink"><button type="button" onclick="copyLink()">Copy</button></div></div>';if(pending.length){h+='<div class="card" style="margin-bottom:16px"><h3>Pending Review ('+pending.length+')</h3><table><thead><tr><th>Company</th><th>Bot name</th><th>UA pattern</th><th>Email</th><th>Purpose</th><th>Submitted</th><th>Actions</th></tr></thead><tbody>';pending.forEach(function(c){h+='<tr><td>'+esc(c.company)+'</td><td>'+esc(c.crawler_name)+'</td><td style="font-family:monospace;font-size:12px">'+esc(c.ua_pattern)+'</td><td>'+esc(c.contact_email)+'</td><td>'+esc((c.purpose||'').slice(0,80))+'</td><td>'+esc(c.created_at?new Date(c.created_at+'Z').toLocaleDateString():'—')+'</td><td style="white-space:nowrap"><button type="button" style="background:#166534;margin-right:4px" onclick="crawlerAction('+c.id+',\'approve\')">Approve</button><button type="button" style="background:#991b1b" onclick="crawlerAction('+c.id+',\'reject\')">Reject</button></td></tr>'});h+='</tbody></table></div>'}if(approved.length){h+='<div class="card" style="margin-bottom:16px"><h3>Approved Crawlers ('+approved.length+')</h3><table><thead><tr><th>Company</th><th>Bot name</th><th>UA pattern</th><th>Token</th><th>Approved</th></tr></thead><tbody>';approved.forEach(function(c){const tokenDisplay=c.token?c.token:'—';h+='<tr><td>'+esc(c.company)+'</td><td>'+esc(c.crawler_name)+'</td><td style="font-family:monospace;font-size:12px">'+esc(c.ua_pattern)+'</td><td style="font-family:monospace;font-size:11px">'+esc(tokenDisplay)+'</td><td>'+esc(c.updated_at?new Date(c.updated_at+'Z').toLocaleDateString():'—')+'</td></tr>'});h+='</tbody></table></div>'}if(rejected.length){h+='<div class="card"><h3>Rejected ('+rejected.length+')</h3><table><thead><tr><th>Company</th><th>Bot name</th><th>UA pattern</th><th>Date</th></tr></thead><tbody>';rejected.forEach(function(c){h+='<tr><td>'+esc(c.company)+'</td><td>'+esc(c.crawler_name)+'</td><td style="font-family:monospace;font-size:12px">'+esc(c.ua_pattern)+'</td><td>'+esc(c.updated_at?new Date(c.updated_at+'Z').toLocaleDateString():'—')+'</td></tr>'});h+='</tbody></table></div>'}if(!pending.length&&!approved.length&&!rejected.length){h+='<div class="card"><p class="sub">No crawler registrations yet. Share the link above to start receiving requests.</p></div>'}panel('crawler-allowlist').innerHTML=h}
+async function crawlerAction(id,action){const s=needShop();if(!s)return;const token=getAdminToken();if(!token)return;try{const res=await fetch(API+'/api/admin/crawlers',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({shop:s,id:id,action:action})});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'Action failed');state.cache={};msg('Crawler '+action+'d successfully.','success');await loadCrawlers(true)}catch(error){msg(error.message||'Unable to complete action.','error')}}
+function copyLink(){const el=document.getElementById('shareLink');if(el){el.select();try{navigator.clipboard?navigator.clipboard.writeText(el.value):document.execCommand('copy');msg('Link copied to clipboard.','success')}catch(e){}}}
 function activateTab(tab){state.tab=tab;document.querySelectorAll('.tabs button').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-tab')===tab)});document.querySelectorAll('.panel').forEach(function(p){p.classList.toggle('active',p.id==='panel-'+tab)});refreshActive(false)}
-async function refreshActive(force){msg('','success');try{if(state.tab==='bot-blocker')await loadBot(force);if(state.tab==='user-intent')await loadIntent(force);if(state.tab==='shopify-app-health')await loadHealth(force);if(state.tab==='conversion-mri')await loadMri(force)}catch(error){msg(error.message||'Unable to load data.','error')}}
-window.activateTab=activateTab;window.refreshActive=refreshActive;window.saveSettings=saveSettings;window.installPixelGuard=installPixelGuard;if(document.getElementById('shopInput').value){setTimeout(function(){refreshActive(true)},180)}
+async function refreshActive(force){msg('','success');try{if(state.tab==='bot-blocker')await loadBot(force);if(state.tab==='user-intent')await loadIntent(force);if(state.tab==='shopify-app-health')await loadHealth(force);if(state.tab==='conversion-mri')await loadMri(force);if(state.tab==='crawler-allowlist')await loadCrawlers(force)}catch(error){msg(error.message||'Unable to load data.','error')}}
+window.activateTab=activateTab;window.refreshActive=refreshActive;window.saveSettings=saveSettings;window.installPixelGuard=installPixelGuard;window.crawlerAction=crawlerAction;window.copyLink=copyLink;if(document.getElementById('shopInput').value){setTimeout(function(){refreshActive(true)},180)}
 <\/script>
+</body>
+</html>`;
+}
+
+function buildCrawlerVerifyHTML(shop) {
+  const shopDisplay = shop || "this store";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crawler Registration — Commerce Shield</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;color:#1e293b;min-height:100vh;display:flex;flex-direction:column}
+header{background:#fff;border-bottom:1px solid #e2e8f0;padding:20px 32px;display:flex;align-items:center;gap:14px}
+header .shield{font-size:28px}
+header h1{font-size:20px;font-weight:700;color:#1e293b}
+header p{font-size:13px;color:#64748b;margin-top:2px}
+main{flex:1;max-width:660px;margin:48px auto;padding:0 20px;width:100%}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,0.05)}
+h2{font-size:22px;font-weight:700;margin-bottom:8px;color:#1e293b}
+.intro{font-size:15px;color:#475569;line-height:1.6;margin-bottom:28px}
+.intro strong{color:#1e293b}
+.field{margin-bottom:20px}
+label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+label .req{color:#dc2626}
+input,textarea,select{width:100%;border:1px solid #d1d5db;border-radius:10px;padding:11px 14px;font-size:14px;color:#111827;background:#fff;outline:none;transition:border-color .15s}
+input:focus,textarea:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+textarea{min-height:90px;resize:vertical}
+.hint{font-size:12px;color:#6b7280;margin-top:5px;line-height:1.5}
+button[type=submit]{width:100%;background:#111827;color:#fff;border:none;border-radius:10px;padding:13px 20px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;transition:background .15s}
+button[type=submit]:hover{background:#1f2937}
+button[type=submit]:disabled{background:#9ca3af;cursor:not-allowed}
+.alert{border-radius:12px;padding:16px 18px;margin-bottom:24px;font-size:14px;line-height:1.55;display:none}
+.alert.show{display:block}
+.alert.success{background:#dcfce7;border:1px solid #86efac;color:#166534}
+.alert.error{background:#fee2e2;border:1px solid #fca5a5;color:#991b1b}
+.faq{margin-top:36px}
+.faq h3{font-size:15px;font-weight:700;margin-bottom:16px;color:#374151}
+.faq-item{border-bottom:1px solid #f1f5f9;padding:12px 0}
+.faq-item:last-child{border-bottom:none}
+.faq-item strong{font-size:14px;color:#1e293b;display:block;margin-bottom:4px}
+.faq-item p{font-size:13px;color:#64748b;line-height:1.6}
+footer{text-align:center;padding:24px;font-size:12px;color:#94a3b8}
+</style>
+</head>
+<body>
+<header>
+  <span class="shield">&#x1f6e1;&#xfe0f;</span>
+  <div>
+    <h1>Commerce Shield — Crawler Registration</h1>
+    <p>Gerber Childrenswear &mdash; ${shopDisplay}</p>
+  </div>
+</header>
+<main>
+  <div class="card">
+    <h2>Register Your Crawler</h2>
+    <p class="intro">
+      If you operate an automated crawler, indexer, or bot that accesses our website for
+      <strong>legitimate purposes</strong> (SEO analysis, price monitoring, accessibility testing, etc.),
+      please fill out this form. Once approved, your crawler will be identified as legitimate and
+      <strong>excluded from analytics</strong> so it never distorts our real visitor data.
+    </p>
+    <div id="alert" class="alert"></div>
+    <form id="regForm" onsubmit="return submitForm(event)">
+      <input type="hidden" id="shopField" name="shop" value="${shop}">
+      <div class="field">
+        <label for="company">Company / Organisation <span class="req">*</span></label>
+        <input type="text" id="company" name="company" placeholder="Acme Analytics Inc." required maxlength="120">
+      </div>
+      <div class="field">
+        <label for="crawlerName">Crawler / Bot name <span class="req">*</span></label>
+        <input type="text" id="crawlerName" name="crawlerName" placeholder="AcmeBot" required maxlength="120">
+      </div>
+      <div class="field">
+        <label for="uaPattern">User agent pattern <span class="req">*</span></label>
+        <input type="text" id="uaPattern" name="uaPattern" placeholder="AcmeBot/1.0" required maxlength="120">
+        <p class="hint">The unique string that appears in your crawler's <code>User-Agent</code> header. Matching is case-insensitive substring. Example: <code>AcmeBot/1.0</code></p>
+      </div>
+      <div class="field">
+        <label for="contactEmail">Contact email <span class="req">*</span></label>
+        <input type="email" id="contactEmail" name="contactEmail" placeholder="crawler-ops@acme.com" required maxlength="120">
+        <p class="hint">We will notify you when your registration is approved or if we need more information.</p>
+      </div>
+      <div class="field">
+        <label for="purpose">Purpose <span class="req">*</span></label>
+        <textarea id="purpose" name="purpose" placeholder="Briefly describe what your crawler does and why it accesses our website..." required maxlength="500"></textarea>
+      </div>
+      <button type="submit" id="submitBtn">Submit Registration</button>
+    </form>
+    <div class="faq">
+      <h3>Frequently asked questions</h3>
+      <div class="faq-item">
+        <strong>What happens after I submit?</strong>
+        <p>Our team reviews the request and approves or declines it, usually within a few business days. You will receive an email with the outcome.</p>
+      </div>
+      <div class="faq-item">
+        <strong>What happens once I'm approved?</strong>
+        <p>Your crawler's user agent will be recognised by Commerce Shield as a legitimate bot. Its visits will be logged separately and excluded from marketing analytics, so they will never inflate or distort our real visitor data. Your crawler continues to access the site normally — nothing changes on your end.</p>
+      </div>
+      <div class="faq-item">
+        <strong>Can I use a token instead of a user agent pattern?</strong>
+        <p>Yes. Once your registration is approved you will receive a unique token. Append <code>?_cs=TOKEN</code> to any URL your crawler requests and Commerce Shield will identify it automatically, even if the user agent is generic.</p>
+      </div>
+      <div class="faq-item">
+        <strong>My crawler uses multiple user agents. What should I do?</strong>
+        <p>Submit a separate registration for each distinct user agent pattern, or use the token-based approach above, which works regardless of user agent.</p>
+      </div>
+    </div>
+  </div>
+</main>
+<footer>Powered by Commerce Shield &mdash; Bot protection &amp; analytics integrity</footer>
+<script>
+async function submitForm(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  const alertEl = document.getElementById('alert');
+  btn.disabled = true;
+  btn.textContent = 'Submitting\u2026';
+  alertEl.className = 'alert';
+  alertEl.textContent = '';
+  const body = {
+    shop: document.getElementById('shopField').value,
+    company: document.getElementById('company').value.trim(),
+    crawlerName: document.getElementById('crawlerName').value.trim(),
+    uaPattern: document.getElementById('uaPattern').value.trim(),
+    contactEmail: document.getElementById('contactEmail').value.trim(),
+    purpose: document.getElementById('purpose').value.trim(),
+  };
+  try {
+    const res = await fetch(window.location.origin + '/api/crawler/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alertEl.className = 'alert show error';
+      alertEl.textContent = data.error || 'Submission failed. Please try again.';
+      btn.disabled = false;
+      btn.textContent = 'Submit Registration';
+    } else {
+      alertEl.className = 'alert show success';
+      alertEl.textContent = data.message || 'Registration received. We will be in touch shortly.';
+      document.getElementById('regForm').reset();
+      document.getElementById('shopField').value = body.shop;
+      btn.textContent = 'Submitted';
+    }
+  } catch (err) {
+    alertEl.className = 'alert show error';
+    alertEl.textContent = 'Network error. Please check your connection and try again.';
+    btn.disabled = false;
+    btn.textContent = 'Submit Registration';
+  }
+  return false;
+}
+</script>
 </body>
 </html>`;
 }

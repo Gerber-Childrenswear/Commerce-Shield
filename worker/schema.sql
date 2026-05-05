@@ -95,3 +95,20 @@ CREATE TABLE IF NOT EXISTS admin_shop_settings (
 CREATE INDEX IF NOT EXISTS idx_intent_events_shop_visitor_created ON intent_events(shop, visitor_key, created_at);
 CREATE INDEX IF NOT EXISTS idx_intent_profiles_shop_email ON intent_profiles(shop, email_hash);
 CREATE INDEX IF NOT EXISTS idx_intent_profiles_shop_customer ON intent_profiles(shop, customer_id);
+
+CREATE TABLE IF NOT EXISTS allowed_crawlers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  shop TEXT NOT NULL,
+  company TEXT NOT NULL,
+  crawler_name TEXT NOT NULL,
+  ua_pattern TEXT NOT NULL DEFAULT '',
+  contact_email TEXT NOT NULL DEFAULT '',
+  purpose TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  token TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_allowed_crawlers_shop_status ON allowed_crawlers(shop, status);
+CREATE INDEX IF NOT EXISTS idx_allowed_crawlers_token ON allowed_crawlers(token);

@@ -21,6 +21,8 @@ const MAX_JSON_BODY_BYTES = 16 * 1024;
 const INTENT_EVENT_LIMIT = 120;
 const BLOOMREACH_LOOKUP_LIMIT = 30;
 const PIXEL_GUARD_EVENT_LIMIT = 240;
+const DASHBOARD_READ_LIMIT = 60;
+const RECENT_READ_LIMIT = 60;
 const NONCE_WINDOW_SECONDS = 300;
 const SHOPIFY_ADMIN_API_VERSION_FALLBACK = "2026-01";
 const SHOPIFY_INTENT_NAMESPACE = "$app";
@@ -127,10 +129,10 @@ export default {
         return handlePixelGuardEvent(request, env, corsHeaders, ctx);
       }
       if (url.pathname === "/api/dashboard" && request.method === "GET") {
-        return handleDashboardData(url, env, corsHeaders);
+        return handleDashboardData(request, url, env, corsHeaders, ctx);
       }
       if (url.pathname === "/api/recent" && request.method === "GET") {
-        return handleRecentVisits(url, env, corsHeaders);
+        return handleRecentVisits(request, url, env, corsHeaders, ctx);
       }
       if (url.pathname === "/api/admin/settings") {
         return handleAdminSettings(request, url, env, corsHeaders);
@@ -160,10 +162,10 @@ export default {
         return servePixelGuard(url);
       }
       if (url.pathname === "/" || url.pathname === "/app" || url.pathname.startsWith("/app/")) {
-        return serveEmbeddedAdmin(url);
+        return serveEmbeddedAdmin(url, request, ctx);
       }
       if (url.pathname === "/dashboard") {
-        return serveDashboard(url);
+        return serveDashboard(url, request, ctx);
       }
       return new Response("Not found", { status: 404 });
     } catch (error) {
@@ -192,6 +194,64 @@ function jsonResponse(body, status, corsHeaders) {
     status,
     headers: { "Content-Type": "application/json", ...corsHeaders },
   });
+}
+
+function jsonResponseWithHeaders(body, status, corsHeaders, extraHeaders = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...corsHeaders, ...extraHeaders },
+  });
+}
+
+function buildReadCacheKey(route, shop, params = {}) {
+  const keyUrl = new URL(`https://cache.local${route}`);
+  keyUrl.searchParams.set("shop", shop);
+  for (const [key, value] of Object.entries(params)) {
+    keyUrl.searchParams.set(key, String(value));
+  }
+  return new Request(keyUrl.toString(), { method: "GET" });
+}
+
+async function respondWithEdgeCache(cacheKey, ttlSeconds, corsHeaders, ctx, producer) {
+  const cache = caches.default;
+  const cached = await cache.match(cacheKey);
+  if (cached) {
+    const hitHeaders = new Headers(cached.headers);
+    for (const [name, value] of Object.entries(corsHeaders)) {
+      hitHeaders.set(name, value);
+    }
+    hitHeaders.set("X-CS-Cache", "HIT");
+    return new Response(cached.body, { status: cached.status, headers: hitHeaders });
+  }
+
+  const fresh = await producer();
+  const freshHeaders = new Headers(fresh.headers);
+  for (const [name, value] of Object.entries(corsHeaders)) {
+    freshHeaders.set(name, value);
+  }
+  freshHeaders.set("Cache-Control", `public, max-age=0, s-maxage=${ttlSeconds}, stale-while-revalidate=${Math.min(ttlSeconds * 4, 300)}`);
+  freshHeaders.set("X-CS-Cache", "MISS");
+  const cacheable = new Response(fresh.body, { status: fresh.status, headers: freshHeaders });
+
+  if (cacheable.status >= 200 && cacheable.status < 300) {
+    const toStore = cacheable.clone();
+    if (ctx && typeof ctx.waitUntil === "function") {
+      ctx.waitUntil(cache.put(cacheKey, toStore));
+    } else {
+      await cache.put(cacheKey, toStore);
+    }
+  }
+
+  return cacheable;
+}
+
+function shouldBlockNoisyReadRequest(request) {
+  const userAgent = sanitizeString(request.headers.get("user-agent") || "", 400).toLowerCase();
+  const hardBotUa = /(adsbot|baiduspider|bingbot|bot|crawler|curl|duckduckbot|googlebot|headless|httpclient|lighthouse|playwright|prerender|puppeteer|python-requests|selenium|spider|wget|yandexbot)/i.test(userAgent);
+  const cfRisk = applyCloudflareRiskSignals(request, 0, false, "low");
+  if (cfRisk.cfThreatScore >= 40) return true;
+  if (hardBotUa && cfRisk.isBot && cfRisk.confidence === "high") return true;
+  return false;
 }
 
 function extractIp(request) {
@@ -1948,10 +2008,19 @@ async function handleBloomreachIntentProfile(request, env, corsHeaders, ctx) {
   }, 200, corsHeaders);
 }
 
-async function handleDashboardData(url, env, corsHeaders) {
-  const shop = url.searchParams.get("shop");
-  const days = parseInt(url.searchParams.get("days") || "30", 10);
-  if (!shop) throw new HttpError("Missing shop param", 400);
+async function handleDashboardData(request, url, env, corsHeaders, ctx) {
+  const shop = normalizeShopDomain(url.searchParams.get("shop"));
+  const days = Math.min(90, Math.max(1, parseInt(url.searchParams.get("days") || "30", 10) || 30));
+  if (!shop) throw new HttpError("Missing or invalid shop param", 400);
+  if (shouldBlockNoisyReadRequest(request)) {
+    throw new HttpError("Blocked by noisy endpoint filter", 403);
+  }
+
+  const ip = extractIp(request);
+  await applyRateLimit(env, "dashboard_read", `${shop}:${ip}`, DASHBOARD_READ_LIMIT, 60);
+
+  const cacheKey = buildReadCacheKey("/api/dashboard", shop, { days });
+  return respondWithEdgeCache(cacheKey, 45, corsHeaders, ctx, async () => {
 
   const since = new Date();
   since.setDate(since.getDate() - days);
@@ -1988,45 +2057,70 @@ async function handleDashboardData(url, env, corsHeaders) {
      FROM visits WHERE shop = ? AND created_at >= datetime(?)`
   ).bind(shop, sinceStr + "T00:00:00").first();
 
-  return jsonResponse({
-    dailyStats: stats.results || [],
-    totals: totals || {},
-    sources: sources.results || [],
-    botTypes: botTypes || {},
-  }, 200, corsHeaders);
-}
-
-async function handleRecentVisits(url, env, corsHeaders) {
-  const shop = url.searchParams.get("shop");
-  const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 200);
-  if (!shop) throw new HttpError("Missing shop param", 400);
-
-  const botsOnly = url.searchParams.get("bots") !== "0";
-  const recent = await env.DB.prepare(
-    botsOnly
-      ? `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
-         FROM visits WHERE shop = ? AND is_bot = 1 ORDER BY id DESC LIMIT ?`
-      : `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
-         FROM visits WHERE shop = ? ORDER BY id DESC LIMIT ?`
-  ).bind(shop, limit).all();
-
-  return jsonResponse({ visits: recent.results || [] }, 200, corsHeaders);
-}
-
-function serveEmbeddedAdmin(url) {
-  const shop = url.searchParams.get("shop") || "";
-  return new Response(buildEmbeddedAdminHTML(shop, url.origin), {
-    headers: { 
-      "Content-Type": "text/html; charset=utf-8",
-      "Content-Security-Policy": "frame-ancestors https://admin.shopify.com https://*.myshopify.com",
-    },
+    return jsonResponseWithHeaders({
+      dailyStats: stats.results || [],
+      totals: totals || {},
+      sources: sources.results || [],
+      botTypes: botTypes || {},
+    }, 200, corsHeaders, {
+      "Cache-Control": "public, max-age=0, s-maxage=45, stale-while-revalidate=180",
+    });
   });
 }
 
-function serveDashboard(url) {
+async function handleRecentVisits(request, url, env, corsHeaders, ctx) {
+  const shop = normalizeShopDomain(url.searchParams.get("shop"));
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 200);
+  if (!shop) throw new HttpError("Missing or invalid shop param", 400);
+  if (shouldBlockNoisyReadRequest(request)) {
+    throw new HttpError("Blocked by noisy endpoint filter", 403);
+  }
+
+  const ip = extractIp(request);
+  await applyRateLimit(env, "recent_read", `${shop}:${ip}`, RECENT_READ_LIMIT, 60);
+
+  const botsOnly = url.searchParams.get("bots") !== "0";
+
+  const cacheKey = buildReadCacheKey("/api/recent", shop, { limit, bots: botsOnly ? 1 : 0 });
+  return respondWithEdgeCache(cacheKey, 20, corsHeaders, ctx, async () => {
+    const recent = await env.DB.prepare(
+      botsOnly
+        ? `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
+           FROM visits WHERE shop = ? AND is_bot = 1 ORDER BY id DESC LIMIT ?`
+        : `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
+           FROM visits WHERE shop = ? ORDER BY id DESC LIMIT ?`
+    ).bind(shop, limit).all();
+
+    return jsonResponseWithHeaders({ visits: recent.results || [] }, 200, corsHeaders, {
+      "Cache-Control": "public, max-age=0, s-maxage=20, stale-while-revalidate=120",
+    });
+  });
+}
+
+function serveEmbeddedAdmin(url, request, ctx) {
   const shop = url.searchParams.get("shop") || "";
-  return new Response(getDashboardHTML(shop), {
-    headers: { "Content-Type": "text/html; charset=utf-8" },
+  const cacheKey = new Request(`https://cache.local${url.pathname}?shop=${encodeURIComponent(shop)}`, { method: "GET" });
+  return respondWithEdgeCache(cacheKey, 120, OPEN_CORS_HEADERS, ctx, async () => {
+    return new Response(buildEmbeddedAdminHTML(shop, url.origin), {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Security-Policy": "frame-ancestors https://admin.shopify.com https://*.myshopify.com",
+        "Cache-Control": "public, max-age=0, s-maxage=120, stale-while-revalidate=300",
+      },
+    });
+  });
+}
+
+function serveDashboard(url, request, ctx) {
+  const shop = url.searchParams.get("shop") || "";
+  const cacheKey = new Request(`https://cache.local/dashboard?shop=${encodeURIComponent(shop)}`, { method: "GET" });
+  return respondWithEdgeCache(cacheKey, 120, OPEN_CORS_HEADERS, ctx, async () => {
+    return new Response(getDashboardHTML(shop), {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "public, max-age=0, s-maxage=120, stale-while-revalidate=300",
+      },
+    });
   });
 }
 
@@ -2083,7 +2177,7 @@ function servePixelGuard(url) {
   return new Response(buildPixelGuardScript(shop, url.origin, reportOnly, enabled), {
     headers: {
       "Content-Type": "application/javascript; charset=utf-8",
-      "Cache-Control": "public, max-age=300, s-maxage=300, stale-while-revalidate=60",
+      "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600",
       "X-Content-Type-Options": "nosniff",
     },
   });
@@ -2636,16 +2730,20 @@ tr:hover td{background:#334155}
 </div>
 <script>
 let lineChart, donutChart;
+let lastDashboardFetchAt = 0;
+const DASHBOARD_REFRESH_MS = 60000;
 
 async function loadDashboard() {
   const shop = document.getElementById('shopInput').value.trim();
   const days = document.getElementById('daysSelect').value;
   if (!shop) return;
+  if (Date.now() - lastDashboardFetchAt < DASHBOARD_REFRESH_MS) return;
+  lastDashboardFetchAt = Date.now();
 
   const base = window.location.origin;
   const [dashRes, recentRes] = await Promise.all([
-    fetch(base + '/api/dashboard?shop=' + encodeURIComponent(shop) + '&days=' + days),
-    fetch(base + '/api/recent?shop=' + encodeURIComponent(shop) + '&limit=25&bots=1')
+    fetch(base + '/api/dashboard?shop=' + encodeURIComponent(shop) + '&days=' + days, { cache: 'force-cache' }),
+    fetch(base + '/api/recent?shop=' + encodeURIComponent(shop) + '&limit=25&bots=1', { cache: 'force-cache' })
   ]);
 
   const dash = await dashRes.json();
@@ -2821,15 +2919,19 @@ tr:hover td{background:#f9fafb}
 <script>
 let lineChart, donutChart;
 const API = '${origin}';
+let lastLoadAt = 0;
+const MIN_LOAD_MS = 60000;
 
 async function loadData() {
   const shop = document.getElementById('shopInput').value.trim();
   const days = document.getElementById('daysSelect').value;
   if (!shop) return;
+  if (Date.now() - lastLoadAt < MIN_LOAD_MS) return;
+  lastLoadAt = Date.now();
   try {
     const [dashRes, recentRes] = await Promise.all([
-      fetch(API + '/api/dashboard?shop=' + encodeURIComponent(shop) + '&days=' + days),
-      fetch(API + '/api/recent?shop=' + encodeURIComponent(shop) + '&limit=25&bots=1')
+      fetch(API + '/api/dashboard?shop=' + encodeURIComponent(shop) + '&days=' + days, { cache: 'force-cache' }),
+      fetch(API + '/api/recent?shop=' + encodeURIComponent(shop) + '&limit=25&bots=1', { cache: 'force-cache' })
     ]);
     const dash = await dashRes.json();
     const recent = await recentRes.json();
@@ -2946,7 +3048,7 @@ function buildEmbeddedAdminHTML(shop, origin) {
   <section id="panel-conversion-mri" class="panel"><div class="load">Conversion MRI waits for enough evidence before surfacing diagnostics.</div></section>
 </div>
 <script>
-const API='${origin}';const state={tab:'bot-blocker',cache:{}};function esc(v){const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML}function fmt(v){return (Number(v)||0).toLocaleString()}function pct(v){return (Number(v)||0).toFixed(1)}function shop(){return document.getElementById('shopInput').value.trim()}function days(){return document.getElementById('daysSelect').value}function panel(id){return document.getElementById('panel-'+id)}function msg(text,tone){const el=document.getElementById('msg');if(!text){el.className='msg';el.textContent='';return}el.className='msg show '+(tone==='error'?'bad':'ok');el.textContent=text}function loading(id,text){panel(id).innerHTML='<div class="load">'+esc(text)+'</div>'}async function api(path,opt){const res=await fetch(path,opt);const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'Request failed');return data}function needShop(){const s=shop();if(!s){msg('Enter a valid .myshopify.com domain first.','error');return''}return s}function getAdminToken(){let token=sessionStorage.getItem('cs_admin_token')||'';if(!token){token=prompt('Enter Commerce Shield admin token to edit theme.liquid:')||'';if(token)sessionStorage.setItem('cs_admin_token',token)}return token}async function installPixelGuard(){const s=needShop();if(!s)return;const token=getAdminToken();if(!token){msg('Admin token required to edit theme.liquid.','error');return}try{msg('Installing pixel guard at the beginning of theme.liquid head...','success');const res=await fetch(API+'/api/admin/install-pixel-guard',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({shop:s})});const data=await res.json().catch(()=>({}));if(res.status===401||res.status===403){sessionStorage.removeItem('cs_admin_token')}if(!res.ok)throw new Error(data.error||'Unable to install pixel guard');state.cache={};msg(data.message||'Pixel guard installed.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to install pixel guard.','error')}}
+const API='${origin}';const state={tab:'bot-blocker',cache:{},lastFetch:{}};const TAB_REFRESH_MS={'bot-blocker':60000,'user-intent':90000,'shopify-app-health':120000,'conversion-mri':120000};function esc(v){const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML}function fmt(v){return (Number(v)||0).toLocaleString()}function pct(v){return (Number(v)||0).toFixed(1)}function shop(){return document.getElementById('shopInput').value.trim()}function days(){return document.getElementById('daysSelect').value}function panel(id){return document.getElementById('panel-'+id)}function msg(text,tone){const el=document.getElementById('msg');if(!text){el.className='msg';el.textContent='';return}el.className='msg show '+(tone==='error'?'bad':'ok');el.textContent=text}function loading(id,text){panel(id).innerHTML='<div class="load">'+esc(text)+'</div>'}async function api(path,opt){const reqOpt=Object.assign({cache:'force-cache'},opt||{});const res=await fetch(path,reqOpt);const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'Request failed');return data}function needShop(){const s=shop();if(!s){msg('Enter a valid .myshopify.com domain first.','error');return''}return s}function getAdminToken(){let token=sessionStorage.getItem('cs_admin_token')||'';if(!token){token=prompt('Enter Commerce Shield admin token to edit theme.liquid:')||'';if(token)sessionStorage.setItem('cs_admin_token',token)}return token}async function installPixelGuard(){const s=needShop();if(!s)return;const token=getAdminToken();if(!token){msg('Admin token required to edit theme.liquid.','error');return}try{msg('Installing pixel guard at the beginning of theme.liquid head...','success');const res=await fetch(API+'/api/admin/install-pixel-guard',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({shop:s})});const data=await res.json().catch(()=>({}));if(res.status===401||res.status===403){sessionStorage.removeItem('cs_admin_token')}if(!res.ok)throw new Error(data.error||'Unable to install pixel guard');state.cache={};msg(data.message||'Pixel guard installed.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to install pixel guard.','error')}}
 function metric(cls,label,value,hint){return '<div class="metric '+cls+'"><div class="k">'+esc(label)+'</div><div class="v">'+esc(value)+'</div><div class="h">'+esc(hint||'')+'</div></div>'}
 function switches(name,checked,title,copy){return '<label class="switch"><input type="checkbox" name="'+esc(name)+'"'+(checked?' checked':'')+'><div><strong>'+esc(title)+'</strong><span>'+esc(copy)+'</span></div></label>'}
 function findings(items){if(!(items||[]).length)return '<div class="card"><p class="sub">No hard-evidence findings were produced under the current conservative settings.</p></div>';return items.map(function(item){const tone=item.severity==='high'?'bad':item.severity==='medium'?'warn':'info';return '<div class="finding"><div class="row"><span class="chip '+tone+'">'+esc(item.severity)+'</span><span class="chip info">'+esc(item.category)+'</span><span class="sub">'+esc(item.location||'')+'</span><span class="sub">Impact '+pct(item.missedConversionPct||0)+'%</span></div><h4>'+esc(item.title)+'</h4><p>'+esc(item.evidence||item.fix||'')+'</p>'+(item.fix?'<p style="margin-top:8px"><strong>Fix:</strong> '+esc(item.fix)+'</p>':'')+'</div>'}).join('')}
@@ -2960,7 +3062,7 @@ async function loadMri(force){const s=needShop();if(!s)return;const key='mri:'+s
 function renderMri(data){const x=data.settings.conversionMri||{},f=data.funnel||{};let h='<div class="head"><div><h2>Conversion MRI</h2><p>Conversion MRI ties funnel drop-off to conservative technical evidence. It would rather miss an issue than recommend a noisy or harmful fix path.</p></div><span class="chip '+(data.auditStatus==='critical'?'bad':data.auditStatus==='warning'?'warn':data.auditStatus==='limited'||data.auditStatus==='disconnected'?'info':'ok')+'">'+esc(data.auditStatus||'healthy')+'</span></div>';h+='<div class="grid cards">'+metric('warn','Missed conversion',pct(data.totalMissedConversionPct||0)+'%','Estimated recoverable conversion from the current evidence-backed findings.')+metric('','Product views',fmt(f.product_view||0),'Distinct profiles reaching product detail pages.')+metric('','Add to cart',fmt(f.add_to_cart||0),'Distinct profiles progressing into the cart.')+metric('','Checkout start',fmt(f.checkout_start||0),'Distinct profiles reaching checkout.')+'</div>';h+=findings(data.diagnostics||[]);h+='<div class="card"><h3>Conversion MRI Controls</h3><form onsubmit="return saveSettings(event,\\'conversionMri\\')">'+switches('conservativeMode',x.conservativeMode,'Conservative mode','Limit the report to the strongest few findings.')+switches('runAppChecks',x.runAppChecks,'App conflict checks','Include store-health findings that plausibly hurt conversion.')+switches('runContentChecks',x.runContentChecks,'Content checks','Allow PDP and cart-content friction diagnostics when ratios are clearly weak.')+switches('runAdaChecks',x.runAdaChecks,'ADA checks','Only surface layout-level accessibility issues with direct evidence.')+switches('runSeoChecks',x.runSeoChecks,'SEO checks','Inspect canonical and title output in the main layout.')+switches('runSpeedChecks',x.runSpeedChecks,'Site speed checks','Use script density and risky inline patterns in the MRI model.')+'<p style="margin-top:14px"><button type="submit">Save Conversion MRI Settings</button></p></form></div><div class="card"><p class="sub">Conversion MRI is intentionally biased toward under-reporting. Weak evidence stays out of the report.</p></div>';panel('conversion-mri').innerHTML=h}
 async function saveSettings(event,section){event.preventDefault();const s=needShop();if(!s)return false;try{const fd=new FormData(event.currentTarget);const payload={shop:s};if(section==='intent'){payload.intent={sensitivity:Number(fd.get('sensitivity'))||62,includePaths:String(fd.get('includePaths')||'').split(/\\r?\\n/).filter(Boolean),rewardProductViews:fd.get('rewardProductViews')==='on',rewardCartSignals:fd.get('rewardCartSignals')==='on',rewardReturningSessions:fd.get('rewardReturningSessions')==='on',suppressBotsAndCrawlers:fd.get('suppressBotsAndCrawlers')==='on',conservativeMode:fd.get('conservativeMode')==='on'}}if(section==='appHealth'){payload.appHealth={detectLegacyScriptTags:fd.get('detectLegacyScriptTags')==='on',requireThemeAppExtensions:fd.get('requireThemeAppExtensions')==='on',detectDuplicatePixels:fd.get('detectDuplicatePixels')==='on',reviewInlineScripts:fd.get('reviewInlineScripts')==='on',conservativeFlagging:fd.get('conservativeFlagging')==='on'}}if(section==='conversionMri'){payload.conversionMri={conservativeMode:fd.get('conservativeMode')==='on',runAppChecks:fd.get('runAppChecks')==='on',runContentChecks:fd.get('runContentChecks')==='on',runAdaChecks:fd.get('runAdaChecks')==='on',runSeoChecks:fd.get('runSeoChecks')==='on',runSpeedChecks:fd.get('runSpeedChecks')==='on'}}await api(API+'/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});state.cache={};msg('Settings saved. Reloading the active tab.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to save settings.','error')}return false}
 function activateTab(tab){state.tab=tab;document.querySelectorAll('.tabs button').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-tab')===tab)});document.querySelectorAll('.panel').forEach(function(p){p.classList.toggle('active',p.id==='panel-'+tab)});refreshActive(false)}
-async function refreshActive(force){msg('','success');try{if(state.tab==='bot-blocker')await loadBot(force);if(state.tab==='user-intent')await loadIntent(force);if(state.tab==='shopify-app-health')await loadHealth(force);if(state.tab==='conversion-mri')await loadMri(force)}catch(error){msg(error.message||'Unable to load data.','error')}}
+async function refreshActive(force){msg('','success');const now=Date.now();const minMs=TAB_REFRESH_MS[state.tab]||60000;const last=state.lastFetch[state.tab]||0;if(!force&&now-last<minMs){return}state.lastFetch[state.tab]=now;try{if(state.tab==='bot-blocker')await loadBot(force);if(state.tab==='user-intent')await loadIntent(force);if(state.tab==='shopify-app-health')await loadHealth(force);if(state.tab==='conversion-mri')await loadMri(force)}catch(error){msg(error.message||'Unable to load data.','error')}}
 window.activateTab=activateTab;window.refreshActive=refreshActive;window.saveSettings=saveSettings;window.installPixelGuard=installPixelGuard;if(document.getElementById('shopInput').value){setTimeout(function(){refreshActive(true)},180)}
 <\/script>
 </body>

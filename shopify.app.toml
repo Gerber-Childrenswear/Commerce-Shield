@@ -1,7 +1,7 @@
 [app]
 name = "Commerce Shield"
 client_id = "dc386b789af148f54d80b54d07e63215"
-application_url = "https://commerce-shield.ncassidy.workers.dev/"
+application_url = "https://commerce-shield.onrender.com/"
 embedded = true
 
 [access_scopes]
@@ -9,7 +9,7 @@ scopes = "read_products,write_products,read_orders,write_orders,read_discounts,w
 
 [auth]
 redirect_urls = [
-  "https://commerce-shield.ncassidy.workers.dev/auth/callback"
+  "https://commerce-shield.onrender.com/auth/callback"
 ]
 
 [webhooks]

@@ -1,5 +1,17 @@
 import React, { useEffect, useState } from 'react';
 
+const CACHE_KEY_APP_HEALTH = 'cs_app_health_cache';
+
+function readCache<T>(key: string): { data: T; savedAt: string } | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function writeCache<T>(key: string, data: T) {
+  try { localStorage.setItem(key, JSON.stringify({ data, savedAt: new Date().toISOString() })); } catch {}
+}
+
 interface AppHealth {
   name: string;
   code_injected: boolean;
@@ -20,22 +32,35 @@ interface AppHealth {
 export const AppHealthCheck: React.FC = () => {
   const [apps, setApps] = useState<AppHealth[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [staleAt, setStaleAt] = useState('');
 
   useEffect(() => {
     fetch('/api/app-health')
-      .then(res => res.json())
-      .then(data => setApps(data.apps || []))
-      .catch(() => setError('Error loading app health.'))
+      .then(res => {
+        if (!res.ok) throw new Error(`${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        const fresh = data.apps || [];
+        setApps(fresh);
+        writeCache(CACHE_KEY_APP_HEALTH, fresh);
+      })
+      .catch(() => {
+        const cached = readCache<AppHealth[]>(CACHE_KEY_APP_HEALTH);
+        if (cached) {
+          setApps(cached.data);
+          setStaleAt(cached.savedAt);
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div style={{ color: 'var(--gcw-subtext)', textAlign: 'center', marginTop: 48 }}>Loading app health data...</div>;
-  if (error) return <div style={{ color: 'var(--gcw-sale)', textAlign: 'center', marginTop: 48 }}>{error}</div>;
 
   return (
     <div className="section card stack" style={{ maxWidth: 1200, margin: '0 auto' }}>
       <h2 style={{ color: 'var(--gcw-text)' }}>Shopify App Health-Check</h2>
+      {staleAt && <div style={{ fontSize: 13, color: 'var(--gcw-subtext)', background: 'var(--gcw-bg-secondary)', padding: '6px 10px', borderRadius: 4, marginBottom: 12 }}>Backend unavailable — showing data from {new Date(staleAt).toLocaleString()}.</div>}
       {apps.length === 0 ? (
         <div style={{ color: 'var(--gcw-subtext)' }}>No apps found.</div>
       ) : (

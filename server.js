@@ -170,6 +170,101 @@ function topN(map, n) {
 }
 
 // ===========================================================================
+// SHOPIFY OAUTH — install / re-authorize to capture access token
+// ===========================================================================
+const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || 'dc386b789af148f54d80b54d07e63215';
+const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
+const SHOPIFY_SCOPES = 'read_products,write_products,read_orders,write_orders,read_discounts,write_discounts,read_script_tags,write_script_tags,read_themes,write_themes';
+const OAUTH_REDIRECT_URI = process.env.SHOPIFY_APP_URL
+  ? `${process.env.SHOPIFY_APP_URL.replace(/\/$/, '')}/auth/callback`
+  : 'https://commerce-shield.onrender.com/auth/callback';
+
+// In-memory nonce store (single instance, short-lived)
+const _oauthNonces = new Map();
+
+app.get('/auth', (req, res) => {
+  const shop = (req.query.shop || '').toString().trim().toLowerCase();
+  if (!shop || !/^[a-z0-9-]+\.myshopify\.com$/.test(shop)) {
+    return res.status(400).send('Missing or invalid shop parameter');
+  }
+  const nonce = crypto.randomBytes(16).toString('hex');
+  _oauthNonces.set(nonce, { shop, ts: Date.now() });
+  const authUrl = `https://${shop}/admin/oauth/authorize?client_id=${SHOPIFY_API_KEY}&scope=${encodeURIComponent(SHOPIFY_SCOPES)}&redirect_uri=${encodeURIComponent(OAUTH_REDIRECT_URI)}&state=${nonce}`;
+  res.redirect(authUrl);
+});
+
+app.get('/auth/callback', async (req, res) => {
+  try {
+    const { shop, code, state, hmac } = req.query;
+    if (!shop || !code || !state || !hmac) return res.status(400).send('Missing OAuth params');
+
+    // Validate nonce
+    const stored = _oauthNonces.get(state);
+    if (!stored || stored.shop !== shop) return res.status(403).send('Invalid state/nonce');
+    _oauthNonces.delete(state);
+
+    // Validate HMAC
+    const params = Object.entries(req.query)
+      .filter(([k]) => k !== 'hmac')
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&');
+    const expectedHmac = crypto.createHmac('sha256', SHOPIFY_API_SECRET).update(params).digest('hex');
+    if (!crypto.timingSafeEqual(Buffer.from(expectedHmac, 'hex'), Buffer.from(hmac, 'hex'))) {
+      return res.status(403).send('HMAC validation failed');
+    }
+
+    // Exchange code for token
+    const tokenRes = await fetch(`https://${shop}/admin/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: SHOPIFY_API_KEY, client_secret: SHOPIFY_API_SECRET, code }),
+    });
+    if (!tokenRes.ok) {
+      const text = await tokenRes.text();
+      log('error', 'OAuth token exchange failed', { status: tokenRes.status, body: text });
+      return res.status(500).send('Token exchange failed');
+    }
+    const { access_token, scope } = await tokenRes.json();
+
+    // Fetch shop numeric ID using the new token
+    let shopId = null;
+    try {
+      const shopRes = await fetch(`https://${shop}/admin/api/2025-10/shop.json`, {
+        headers: { 'X-Shopify-Access-Token': access_token },
+      });
+      if (shopRes.ok) {
+        const shopData = await shopRes.json();
+        shopId = shopData?.shop?.id ?? null;
+      }
+    } catch (e) {
+      log('warn', 'Could not fetch shop ID', { error: e.message });
+    }
+
+    // Log prominently so we can copy from Render logs
+    log('info', '=== OAUTH SUCCESS — COPY THESE VALUES ===', {
+      shop,
+      scope,
+      SHOPIFY_ADMIN_API_ACCESS_TOKEN: access_token,
+      SHOPIFY_SHOP_ID: shopId,
+    });
+    log('info', `TOKEN: ${access_token}`);
+    log('info', `SHOP_ID: ${shopId}`);
+
+    res.send(`
+      <h2>OAuth complete!</h2>
+      <p>Access token captured in server logs. Check Render dashboard → Logs.</p>
+      <p>Shop: ${shop}</p>
+      <p>Shop ID: ${shopId}</p>
+      <p>Scopes: ${scope}</p>
+    `);
+  } catch (err) {
+    log('error', 'OAuth callback error', { error: err.message });
+    res.status(500).send('Internal error during OAuth');
+  }
+});
+
+// ===========================================================================
 // UNAUTHENTICATED ROUTES — registered BEFORE auth middleware
 // ===========================================================================
 

@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "npm --prefix web install && npm --prefix web run build",
+    "build": "npm --prefix web install --include=dev && npm --prefix web run build",
     "dev": "LOG_LEVEL=debug node server.js",
     "worker:install": "npm --prefix worker install",
     "worker:dev": "npm --prefix worker run dev",

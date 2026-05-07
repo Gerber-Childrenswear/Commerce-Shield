@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Commerce Shield — Executive Security Impact Report</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
@@ -30,7 +28,7 @@
     html { font-size: 10pt; }
 
     body {
-      font-family: 'Inter', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
       color: var(--gray-800);
       background: var(--white);
       line-height: 1.6;
@@ -453,7 +451,7 @@
       border: none;
       border-radius: 8px;
       padding: 10px 22px;
-      font-family: 'Inter', sans-serif;
+      font-family: inherit;
       font-size: 10pt;
       font-weight: 700;
       cursor: pointer;
@@ -479,7 +477,7 @@
       border: 1px solid rgba(255,255,255,0.25);
       border-radius: 8px;
       padding: 9px 16px;
-      font-family: 'Inter', sans-serif;
+      font-family: inherit;
       font-size: 9.5pt;
       font-weight: 500;
       cursor: pointer;
@@ -494,8 +492,7 @@
 <div class="download-bar">
   <div class="download-bar-title">COMMERCE <span>SHIELD</span> &mdash; Executive Security Impact Report &middot; May 2026</div>
   <div class="download-bar-right">
-    <button class="btn-print" onclick="window.print()">🖨 Print</button>
-    <button class="btn-download" id="dlBtn" onclick="downloadPDF()">⬇ Download PDF</button>
+    <button class="btn-download" id="dlBtn" onclick="savePDF()">⬇ Save as PDF</button>
   </div>
 </div>
 
@@ -1103,30 +1100,9 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
-  function downloadPDF() {
-    const btn = document.getElementById('dlBtn');
-    btn.classList.add('loading');
-    btn.innerHTML = '⏳ Generating PDF...';
-
-    const bar = document.querySelector('.download-bar');
-    bar.style.display = 'none';
-
-    const opt = {
-      margin:      0,
-      filename:    'Commerce-Shield-Executive-Report-May2026.pdf',
-      image:       { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-      jsPDF:       { unit: 'in', format: 'letter', orientation: 'portrait' },
-      pagebreak:   { mode: ['avoid-all', 'css', 'legacy'] }
-    };
-
-    html2pdf().set(opt).from(document.body).save().then(() => {
-      bar.style.display = 'flex';
-      btn.classList.remove('loading');
-      btn.innerHTML = '⬇ Download PDF';
-    });
+  function savePDF() {
+    window.print();
   }
 </script>
 </body>

@@ -15,4 +15,4 @@ redirect_urls = [
 [webhooks]
 
 [development]
-store = "your-dev-store.myshopify.com"
+store = "gerberchildrenswear.myshopify.com"

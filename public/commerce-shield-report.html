@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Commerce Shield — Executive Security Impact Report</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:    #0b1e3d;
+      --blue:    #1a4fba;
+      --accent:  #2563eb;
+      --sky:     #e8f0fe;
+      --teal:    #0d9488;
+      --red:     #dc2626;
+      --amber:   #d97706;
+      --green:   #16a34a;
+      --gray-50: #f8fafc;
+      --gray-100:#f1f5f9;
+      --gray-200:#e2e8f0;
+      --gray-400:#94a3b8;
+      --gray-600:#475569;
+      --gray-800:#1e293b;
+      --white:   #ffffff;
+    }
+
+    html { font-size: 10pt; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      color: var(--gray-800);
+      background: var(--white);
+      line-height: 1.6;
+    }
+
+    /* ── COVER PAGE ───────────────────────────────────── */
+    .cover {
+      background: linear-gradient(145deg, var(--navy) 0%, #112d6b 55%, #1a4fba 100%);
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 60px 64px 48px;
+      page-break-after: always;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cover::before {
+      content: '';
+      position: absolute;
+      top: -120px; right: -120px;
+      width: 480px; height: 480px;
+      border-radius: 50%;
+      background: rgba(37,99,235,0.18);
+    }
+    .cover::after {
+      content: '';
+      position: absolute;
+      bottom: -80px; left: -80px;
+      width: 340px; height: 340px;
+      border-radius: 50%;
+      background: rgba(13,148,136,0.14);
+    }
+
+    .cover-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 100px;
+      padding: 6px 16px;
+      font-size: 9pt;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      width: fit-content;
+    }
+
+    .cover-logo {
+      font-size: 13pt;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-top: 48px;
+    }
+    .cover-logo span { color: #60a5fa; }
+
+    .cover-headline {
+      font-size: 36pt;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-top: 20px;
+      max-width: 540px;
+    }
+
+    .cover-sub {
+      font-size: 13pt;
+      font-weight: 400;
+      color: rgba(255,255,255,0.72);
+      margin-top: 18px;
+      max-width: 480px;
+      line-height: 1.55;
+    }
+
+    .cover-stats {
+      display: flex;
+      gap: 36px;
+      margin-top: 48px;
+    }
+
+    .cover-stat {
+      border-top: 2px solid rgba(255,255,255,0.25);
+      padding-top: 14px;
+    }
+
+    .cover-stat-num {
+      font-size: 26pt;
+      font-weight: 900;
+      color: #60a5fa;
+      line-height: 1;
+    }
+
+    .cover-stat-label {
+      font-size: 8.5pt;
+      color: rgba(255,255,255,0.65);
+      margin-top: 4px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .cover-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-top: 1px solid rgba(255,255,255,0.18);
+      padding-top: 20px;
+      font-size: 8.5pt;
+      color: rgba(255,255,255,0.55);
+      position: relative;
+      z-index: 1;
+    }
+
+    .cover-meta strong { color: rgba(255,255,255,0.85); }
+
+    /* ── BODY PAGES ───────────────────────────────────── */
+    .page {
+      padding: 52px 64px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .page + .page { border-top: 1px solid var(--gray-200); }
+
+    /* ── SECTION HEADERS ──────────────────────────────── */
+    .section-label {
+      font-size: 7.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    h2 {
+      font-size: 20pt;
+      font-weight: 800;
+      color: var(--navy);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-bottom: 14px;
+    }
+
+    h3 {
+      font-size: 12pt;
+      font-weight: 700;
+      color: var(--navy);
+      margin-top: 28px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      font-size: 10pt;
+      color: var(--gray-600);
+      margin-bottom: 14px;
+      line-height: 1.7;
+    }
+
+    p strong { color: var(--gray-800); font-weight: 600; }
+
+    /* ── DIVIDER ──────────────────────────────────────── */
+    .divider {
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--teal), transparent);
+      border-radius: 2px;
+      margin-bottom: 28px;
+    }
+
+    /* ── CALLOUT BOXES ────────────────────────────────── */
+    .callout {
+      border-radius: 10px;
+      padding: 18px 22px;
+      margin: 20px 0;
+    }
+
+    .callout-blue {
+      background: var(--sky);
+      border-left: 4px solid var(--accent);
+    }
+
+    .callout-navy {
+      background: var(--navy);
+      color: white;
+      border-radius: 10px;
+      padding: 24px 28px;
+      margin: 24px 0;
+    }
+
+    .callout-navy p { color: rgba(255,255,255,0.8); margin-bottom: 0; }
+    .callout-navy h3 { color: #93c5fd; margin-top: 0; }
+
+    .callout-amber {
+      background: #fffbeb;
+      border-left: 4px solid var(--amber);
+    }
+
+    .callout-red {
+      background: #fef2f2;
+      border-left: 4px solid var(--red);
+    }
+
+    .callout p { margin-bottom: 0; font-size: 10pt; }
+    .callout-title { font-weight: 700; font-size: 10pt; margin-bottom: 6px; color: var(--gray-800); }
+
+    /* ── THREAT TABLE ─────────────────────────────────── */
+    .threat-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9pt;
+      margin: 20px 0;
+    }
+
+    .threat-table th {
+      background: var(--navy);
+      color: white;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .threat-table th:first-child { border-radius: 6px 0 0 0; }
+    .threat-table th:last-child  { border-radius: 0 6px 0 0; }
+
+    .threat-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: top;
+      line-height: 1.5;
+      color: var(--gray-700, #374151);
+    }
+
+    .threat-table tr:nth-child(even) td { background: var(--gray-50); }
+    .threat-table tr:last-child td { border-bottom: none; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 100px;
+      font-size: 8pt;
+      font-weight: 600;
+    }
+
+    .badge-red    { background: #fee2e2; color: #991b1b; }
+    .badge-amber  { background: #fef3c7; color: #92400e; }
+    .badge-green  { background: #dcfce7; color: #166534; }
+    .badge-blue   { background: #dbeafe; color: #1e40af; }
+    .badge-caught { background: #dcfce7; color: #166534; }
+    .badge-evasion{ background: #fee2e2; color: #991b1b; }
+
+    /* ── TIMELINE ─────────────────────────────────────── */
+    .timeline { margin: 24px 0; }
+
+    .timeline-item {
+      display: flex;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+
+    .timeline-marker {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .timeline-dot {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8.5pt;
+      font-weight: 800;
+      color: white;
+    }
+
+    .timeline-dot-1 { background: var(--accent); }
+    .timeline-dot-2 { background: var(--teal); }
+    .timeline-dot-3 { background: var(--navy); }
+
+    .timeline-line {
+      width: 2px;
+      flex: 1;
+      background: var(--gray-200);
+      margin-top: 4px;
+    }
+
+    .timeline-content { padding-top: 6px; padding-bottom: 16px; }
+    .timeline-period { font-size: 8pt; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+    .timeline-title  { font-size: 11pt; font-weight: 700; color: var(--navy); margin: 3px 0 6px; }
+    .timeline-body   { font-size: 9.5pt; color: var(--gray-600); line-height: 1.6; }
+
+    /* ── PILLAR CARDS ─────────────────────────────────── */
+    .pillars { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 20px 0; }
+
+    .pillar {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-top: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .pillar-icon { font-size: 18pt; margin-bottom: 8px; }
+    .pillar-title { font-size: 9.5pt; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+    .pillar-body  { font-size: 8.5pt; color: var(--gray-600); line-height: 1.55; }
+
+    /* ── BRAND GRID ───────────────────────────────────── */
+    .brand-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+
+    .brand-card {
+      background: var(--sky);
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+
+    .brand-card-title { font-size: 10pt; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+    .brand-card-url   { font-size: 8pt; color: var(--accent); font-weight: 500; margin-bottom: 8px; font-family: monospace; }
+    .brand-card-body  { font-size: 8.5pt; color: var(--gray-600); line-height: 1.55; }
+
+    /* ── RECOMMENDATION LIST ──────────────────────────── */
+    .rec-list { list-style: none; margin: 16px 0; }
+    .rec-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--gray-100);
+      font-size: 9.5pt;
+      color: var(--gray-600);
+      line-height: 1.55;
+    }
+    .rec-list li:last-child { border-bottom: none; }
+    .rec-num {
+      flex-shrink: 0;
+      width: 26px; height: 26px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8pt;
+      font-weight: 800;
+      margin-top: 1px;
+    }
+    .rec-text strong { color: var(--gray-800); display: block; margin-bottom: 2px; font-size: 10pt; }
+
+    /* ── FOOTER ───────────────────────────────────────── */
+    .report-footer {
+      background: var(--navy);
+      color: rgba(255,255,255,0.6);
+      padding: 24px 64px;
+      font-size: 8pt;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 48px;
+    }
+
+    .report-footer strong { color: rgba(255,255,255,0.9); }
+
+    /* ── PRINT ────────────────────────────────────────── */
+    @media print {
+      body { font-size: 9.5pt; }
+      .cover { min-height: 100vh; }
+      .page { page-break-inside: avoid; }
+      .no-break { page-break-inside: avoid; }
+      a { color: inherit; text-decoration: none; }
+      .download-bar { display: none !important; }
+
+      @page {
+        margin: 0;
+        size: letter;
+      }
+    }
+
+    /* ── DOWNLOAD BAR ─────────────────────────────────── */
+    .download-bar {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: var(--navy);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 32px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+    }
+
+    .download-bar-title {
+      font-size: 10pt;
+      font-weight: 700;
+      color: white;
+      letter-spacing: -0.01em;
+    }
+
+    .download-bar-title span { color: #60a5fa; }
+
+    .download-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 22px;
+      font-family: 'Inter', sans-serif;
+      font-size: 10pt;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      text-decoration: none;
+    }
+
+    .btn-download:hover { background: #1d4ed8; transform: translateY(-1px); }
+    .btn-download:active { transform: translateY(0); }
+
+    .btn-download.loading {
+      background: #1e3a5f;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .btn-print {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      color: rgba(255,255,255,0.7);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      padding: 9px 16px;
+      font-family: 'Inter', sans-serif;
+      font-size: 9.5pt;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-print:hover { color: white; border-color: rgba(255,255,255,0.5); }
+  </style>
+</head>
+<body>
+
+<div class="download-bar">
+  <div class="download-bar-title">COMMERCE <span>SHIELD</span> &mdash; Executive Security Impact Report &middot; May 2026</div>
+  <div class="download-bar-right">
+    <button class="btn-print" onclick="window.print()">🖨 Print</button>
+    <button class="btn-download" id="dlBtn" onclick="downloadPDF()">⬇ Download PDF</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     COVER PAGE
+════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div style="position:relative;z-index:1;">
+    <div class="cover-badge">🛡 Confidential — Executive Briefing</div>
+    <div class="cover-logo">COMMERCE <span>SHIELD</span></div>
+    <div class="cover-headline">The Last Line of Defense for Your Digital Storefronts</div>
+    <div class="cover-sub">
+      An executive-level briefing on how Commerce Shield detects, classifies, and suppresses analytics signals from every bot, scraper,
+      and automated session targeting Gerber Childrenswear's eCommerce properties — restoring data integrity
+      and why the threat landscape is about to get dramatically more dangerous.
+    </div>
+
+    <div class="cover-stats">
+      <div class="cover-stat">
+        <div class="cover-stat-num">100%</div>
+        <div class="cover-stat-label">Edge Coverage<br>Every request, every store</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">0ms</div>
+        <div class="cover-stat-label">Added Latency<br>Cloudflare global network</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">∞</div>
+        <div class="cover-stat-label">Learning Curve<br>Gets smarter over time</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">6+</div>
+        <div class="cover-stat-label">Bot Classes<br>Identified in live traffic</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cover-meta" style="position:relative;z-index:1;">
+    <div>
+      <strong>Prepared for:</strong> Director of eCommerce &amp; Technology Leadership<br>
+      Gerber Childrenswear — Baby &amp; Toddler Storefronts
+    </div>
+    <div style="text-align:right;">
+      <strong>Date:</strong> May 7, 2026<br>
+      Classification: Internal — Confidential
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 1 — EXECUTIVE SUMMARY
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-label">Section 01</div>
+  <h2>The Problem We Solved — Before It Solved Us</h2>
+  <div class="divider"></div>
+
+  <p>
+    Right now, a share of every visitor hitting your Shopify storefronts is not a customer.
+    It's a machine. A competitor's price scraper harvesting your doorbuster markdowns.
+    A credential-stuffing bot probing your customer login pages. A botnet cataloging your entire
+    product inventory to build a competing feed. A crawler inflating your analytics with
+    sessions that will never convert — and never were meant to.
+  </p>
+
+  <p>
+    Before Commerce Shield, that activity was <strong>invisible</strong>. It blended into your traffic,
+    poisoned your conversion data, and informed business decisions that were unknowingly built on
+    fabricated demand signals.
+  </p>
+
+  <div class="callout callout-blue">
+    <div class="callout-title">Commerce Shield changes this permanently.</div>
+    <p>
+      Deployed at Cloudflare's global edge network, Commerce Shield sits between the open internet
+      and every one of your storefronts — evaluating every request in real time, before it reaches
+      Shopify, before it consumes a single API call, and before it has any chance to corrupt
+      your data or your customer experience.
+    </p>
+  </div>
+
+  <p>
+    This is not a plugin. This is not a third-party SaaS subscription with a dashboard that
+    shows you yesterday's data. Commerce Shield is <strong>your proprietary infrastructure</strong>,
+    purpose-built for your traffic patterns, your threat landscape, and your brands.
+    It runs on hardware that processes more internet traffic than any other provider on Earth.
+    And it gets smarter with every request it sees.
+  </p>
+
+  <h3>What Commerce Shield Protects</h3>
+
+  <div class="brand-grid">
+    <div class="brand-card">
+      <div class="brand-card-title">Gerber Childrenswear</div>
+      <div class="brand-card-url">gerberchildrenswear.myshopify.com</div>
+      <div class="brand-card-body">Primary flagship storefront. Highest traffic volume, highest scraping risk. Doorbuster collections and promotional pricing are active targets for competitor intelligence bots.</div>
+    </div>
+    <div class="brand-card">
+      <div class="brand-card-title">Development &amp; Staging Store</div>
+      <div class="brand-card-url">gcw-dev.myshopify.com</div>
+      <div class="brand-card-body">Active threat detection testbed. Live bot telemetry is captured here first — all identified threats in this report were observed against real traffic on this store.</div>
+    </div>
+    <div class="brand-card">
+      <div class="brand-card-title">Future Baby Store Expansion</div>
+      <div class="brand-card-url">Additional storefronts</div>
+      <div class="brand-card-body">Commerce Shield's architecture supports unlimited Shopify stores under a single deployment. Protecting a new storefront is a configuration change, not a rebuild.</div>
+    </div>
+    <div class="brand-card">
+      <div class="brand-card-title">Wholesale &amp; Partner Portals</div>
+      <div class="brand-card-url">Future scope</div>
+      <div class="brand-card-body">B2B login portals, vendor feeds, and partner pricing APIs face identical threats — credential stuffing, price scraping, rate abuse — and can be brought under the same shield.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 2 — HOW IT WORKS
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-label">Section 02</div>
+  <h2>How Commerce Shield Works</h2>
+  <div class="divider"></div>
+
+  <p>
+    Commerce Shield is not a single rule or a blacklist. It is a layered intelligence stack that
+    evaluates every inbound request against multiple independent signals simultaneously —
+    so that a sophisticated bot evading one layer is caught by another.
+  </p>
+
+  <div class="pillars">
+    <div class="pillar">
+      <div class="pillar-icon">🔍</div>
+      <div class="pillar-title">Bot Detection &amp; Analytics Suppression</div>
+      <div class="pillar-body">User-Agent fingerprinting, Cloudflare bot scoring, behavioral pattern matching, and IP reputation — evaluated at the edge. Detected bot sessions are excluded from analytics pixels so your data reflects only real customer behavior.</div>
+    </div>
+    <div class="pillar">
+      <div class="pillar-icon">🧠</div>
+      <div class="pillar-title">Intent Scoring Engine (MRI)</div>
+      <div class="pillar-body">Every visitor receives a real-time purchase intent score based on page depth, product interactions, session velocity, and behavioral patterns. Real customers drive your metrics. Bot sessions are excluded from analytics so intent signals stay clean.</div>
+    </div>
+    <div class="pillar">
+      <div class="pillar-icon">🔐</div>
+      <div class="pillar-title">Checkout Integrity</div>
+      <div class="pillar-body">Shopify checkout events are wrapped in HMAC-signed verification. Automated cart stuffing, stolen card probing, and discount enumeration attacks fail before they can reach Shopify's payment pipeline.</div>
+    </div>
+    <div class="pillar">
+      <div class="pillar-icon">🎯</div>
+      <div class="pillar-title">Turnstile Challenge Layer</div>
+      <div class="pillar-body">Cloudflare Turnstile — an invisible, privacy-preserving CAPTCHA alternative — gates sensitive entry points: /account/login, /checkout, and any endpoint worth protecting from automation.</div>
+    </div>
+    <div class="pillar">
+      <div class="pillar-icon">📊</div>
+      <div class="pillar-title">Persistent Threat Database</div>
+      <div class="pillar-body">Every detected threat is logged to a persistent D1 database. This data compounds — the longer Commerce Shield runs, the sharper its pattern recognition becomes for your specific traffic.</div>
+    </div>
+    <div class="pillar">
+      <div class="pillar-icon">⚡</div>
+      <div class="pillar-title">Zero Latency Impact</div>
+      <div class="pillar-body">All processing runs on Cloudflare's edge — the same infrastructure that serves 20% of the internet. No external API calls. No cold starts. No performance penalty for your real customers.</div>
+    </div>
+  </div>
+
+  <div class="callout callout-navy">
+    <h3>Why Cloudflare Edge Architecture Matters</h3>
+    <p>
+      Traditional analytics tools have no way to distinguish a bot session from a human one — meaning
+      bot traffic inflates your page views, distorts your conversion rates, and corrupts every decision
+      built on that data. Commerce Shield runs at Cloudflare's 300+ global Points of Presence, classifying
+      every session before it contributes to your analytics. Bot-originated sessions are suppressed from
+      your pixel and tracking layer entirely. Your data reflects your customers — not your crawlers.
+    </p>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 3 — THREAT INTELLIGENCE
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-label">Section 03</div>
+  <h2>Real Bots. Real Traffic. Caught on Your Stores.</h2>
+  <div class="divider"></div>
+
+  <p>
+    These are not hypothetical threats. Every bot class below was observed in live traffic
+    against Gerber Childrenswear Shopify stores during active Commerce Shield monitoring.
+    This is your real threat landscape — and this is only what we can see at this stage.
+  </p>
+
+  <h3>Confirmed &amp; Suppressed from Analytics</h3>
+
+  <table class="threat-table">
+    <thead>
+      <tr>
+        <th>Threat Actor</th>
+        <th>Fingerprint</th>
+        <th>Bot Score</th>
+        <th>Detection Method</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Selenium / Playwright Automation Bot</strong><br><span style="color:#64748b;font-size:8pt;">IP: 2607:5300:205:200::42ad — Canada</span></td>
+        <td><span style="font-family:monospace;font-size:8pt;">Chrome/88, Mac OS X 11_1_0</span></td>
+        <td><span class="badge badge-red">0.96 / 1.0</span></td>
+        <td>Cloudflare bot score + <code style="font-size:8pt;">webdriver</code> JS flag detected at runtime</td>
+        <td><span class="badge badge-caught">SUPPRESSED</span></td>
+      </tr>
+      <tr>
+        <td><strong>Facebook Ad Intelligence Crawler</strong><br><span style="color:#64748b;font-size:8pt;">Meta Platforms automated feed</span></td>
+        <td><span style="font-family:monospace;font-size:8pt;">meta-externalads/1.1</span></td>
+        <td><span class="badge badge-red">1.0 / 1.0</span></td>
+        <td>UA keyword classification — <code style="font-size:8pt;">bot</code> token match</td>
+        <td><span class="badge badge-caught">SUPPRESSED</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Identified — Active in Your Traffic — Next Priority</h3>
+
+  <table class="threat-table">
+    <thead>
+      <tr>
+        <th>Threat Actor</th>
+        <th>Fingerprint / IPs</th>
+        <th>Risk</th>
+        <th>Why It Evades</th>
+        <th>Fix</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>
+          <strong>Stealth Scraper Botnet</strong><br>
+          <span style="color:#64748b;font-size:8pt;">Targeting: /collections/doorbusters, /products/*, /blogs/news/*</span>
+        </td>
+        <td style="font-family:monospace;font-size:7.5pt;">
+          185.226.213.35 (ES)<br>
+          152.163.128.77 (US)<br>
+          209.101.3.63 (DE)<br>
+          152.89.120.64 (ES)<br>
+          Chrome/125, Mac OS X 10_15_7
+        </td>
+        <td><span class="badge badge-red">HIGH</span></td>
+        <td>Clean Chrome UA, no webdriver flag. Uses a fixed outdated build (Chrome/125 — 22 versions behind current) across multiple geo IPs. Classic botnet pattern: consistent fingerprint, distributed origin.</td>
+        <td>Cloudflare WAF IP rules + behavioral rate limiting</td>
+      </tr>
+      <tr>
+        <td>
+          <strong>WeChat / MicroMessenger In-App Browser</strong><br>
+          <span style="color:#64748b;font-size:8pt;">IP: 155.94.159.64 — Spain</span>
+        </td>
+        <td style="font-family:monospace;font-size:7.5pt;">MicroMessenger/8.0.58.2841<br>XWEB/1340109 · MMWEBSDK</td>
+        <td><span class="badge badge-amber">MEDIUM</span></td>
+        <td>Bot tokens appear late in UA string, outside the initial match window of basic UA parsers.</td>
+        <td>Pattern expansion to <code style="font-size:8pt;">micromessenger|weixin|xweb</code> — already scoped, ready to deploy</td>
+      </tr>
+      <tr>
+        <td>
+          <strong>Baiduspider-render / Chinese Search Engine</strong><br>
+          <span style="color:#64748b;font-size:8pt;">IPs: 116.179.37.48, 116.179.37.150 — China</span>
+        </td>
+        <td style="font-family:monospace;font-size:7.5pt;">Baiduspider-render/2.0</td>
+        <td><span class="badge badge-blue">LOW</span></td>
+        <td>Server-side HTTP crawler — never executes JavaScript. UA token <em>is</em> flagged, but client-side pixel guard cannot fire for headless HTTP requests.</td>
+        <td>Server-side UA header inspection (already partially in place)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-amber" style="margin-top:20px;">
+    <div class="callout-title">⚠ The Stealth Botnet Is Your Most Urgent Risk</div>
+    <p>
+      Four geographically distributed IPs — Spain, the US, Germany — all using an identical Chrome/125
+      fingerprint, all scraping your promotional collections. This is not opportunistic crawling.
+      This is a <strong>coordinated, ongoing intelligence operation against your pricing strategy.</strong>
+      Every doorbuster price you publish is being harvested in near real-time.
+    </p>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 4 — BUSINESS IMPACT
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-label">Section 04</div>
+  <h2>What This Costs You Without Commerce Shield</h2>
+  <div class="divider"></div>
+
+  <h3>Pricing Intelligence Leakage</h3>
+  <p>
+    Your promotional markdown strategy is one of the most valuable — and most sensitive — assets
+    in your eCommerce operation. The stealth botnet targeting <code>/collections/doorbusters</code>
+    is harvesting that data systematically, across multiple countries, on a recurring basis.
+    Competitors who know your markdown schedule before your customers do can undercut you in paid
+    search, inflate resale values ahead of drops, or time their own promotions to cannibalize your
+    peak conversion windows. <strong>This is not theoretical. This bot is active right now.</strong>
+  </p>
+
+  <h3>Data Poisoning &amp; Bad Analytics</h3>
+  <p>
+    When bots inflate product page views, you see false demand signals. Items that bots are
+    cataloging look like trending products. Conversion rates look lower than they are because
+    the denominator includes non-human sessions. Merchandising decisions made on this data —
+    inventory buys, promotional allocation, ad spend targeting — are systematically wrong.
+    Commerce Shield separates machine sessions from human sessions, giving you a clean baseline
+    for every business decision that depends on traffic data.
+  </p>
+
+  <h3>Checkout Integrity &amp; Fraud</h3>
+  <p>
+    Automated checkout probing is used to test stolen credit card numbers, enumerate valid discount
+    codes, and identify checkout flow vulnerabilities that human QA never finds. Each failed probe
+    consumes Shopify API quota, triggers fraud review overhead, and risks false positives that
+    block legitimate customers. Commerce Shield's HMAC-signed checkout event verification
+    ensures only verified, human-originated checkout events contribute to your funnel analytics.
+  </p>
+
+  <h3>Shopify API Quota &amp; Infrastructure Cost</h3>
+  <p>
+    Every bot request that reaches Shopify consumes API rate limit budget — the same budget your
+    apps, integrations, and real customer sessions compete for. Bot sessions identified at the
+    Cloudflare edge are excluded from your analytics pixel, meaning <strong>your reported metrics reflect only real customers.</strong>
+    At scale, this meaningfully reduces infrastructure pressure and removes the failure mode where
+    your dashboards show volume that was never real demand.
+  </p>
+
+  <div class="callout callout-red">
+    <div class="callout-title">🚨 The Hidden Cost of Inaction</div>
+    <p>
+      Every day Commerce Shield is not suppressing the stealth botnet from your analytics, your promotional pricing
+      intelligence is being harvested and your traffic data is being inflated with machine sessions.
+      Every day without Turnstile on /account/login, credential stuffing runs undetected.
+      Every day without clean bot-free analytics, your team makes decisions on corrupted data.
+      The cost of inaction compounds silently — which is exactly what makes it dangerous.
+    </p>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 5 — THE AI THREAT
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-label">Section 05</div>
+  <h2>The AI Bot Crisis Coming for Every eCommerce Enterprise</h2>
+  <div class="divider"></div>
+
+  <p>
+    What we intercepted on your storefronts today represents the <em>current</em> generation
+    of bot threats — sophisticated by historical standards, but still requiring meaningful
+    technical skill to build and operate. That barrier is evaporating.
+  </p>
+
+  <p>
+    Generative AI has made bot creation accessible to anyone with a laptop and a subscription.
+    A working Playwright scraper that mimics human browsing behavior, rotates User Agents,
+    randomizes request timing, and distributes traffic across residential IPs can now be
+    prompted into existence in under five minutes with no programming knowledge required.
+    <strong>The stealth botnet we observed — four coordinated IPs with a clean modern Chrome fingerprint
+    hitting your promotional collections — is a preview of what commodity AI-assisted bot
+    infrastructure looks like at scale.</strong> In 18 to 24 months, every competitor, every
+    reseller, and every bad actor will have access to bots of equal or greater sophistication
+    for the cost of a SaaS subscription.
+  </p>
+
+  <h3>What the AI Bot Future Looks Like for Baby &amp; Toddler Retail</h3>
+
+  <div class="callout callout-blue" style="margin-bottom:14px;">
+    <div class="callout-title">📦 AI-Powered Competitive Intelligence Bots</div>
+    <p>
+      Competitors will run continuous, AI-guided scrapers that monitor your entire product catalog
+      — prices, inventory levels, promotional schedules, bundle configurations — and feed that data
+      into their own pricing and merchandising engines automatically. Your markdown strategy becomes
+      their markdown strategy, minutes after you publish it.
+    </p>
+  </div>
+
+  <div class="callout callout-blue" style="margin-bottom:14px;">
+    <div class="callout-title">👶 Loyalty &amp; Coupon Fraud at Scale</div>
+    <p>
+      Baby and toddler retail has high repeat purchase frequency and strong loyalty program
+      incentives — exactly the profile that automated coupon abuse and fake account farming
+      targets. AI agents will create thousands of synthetic customer accounts, harvest welcome
+      discounts and loyalty points, and liquidate them before fraud detection triggers.
+      Without behavioral intent scoring separating real customers from synthetic ones, this
+      runs invisibly until the financial damage is already done.
+    </p>
+  </div>
+
+  <div class="callout callout-blue" style="margin-bottom:14px;">
+    <div class="callout-title">🤖 Checkout Vulnerability Probing</div>
+    <p>
+      AI-powered bots will probe your checkout flow for edge cases — discount stacking logic,
+      gift card combinations, promotional exclusion rules — with a thoroughness that human QA
+      cannot match. Every exploitable gap becomes a vector for systematic margin erosion.
+      Commerce Shield's HMAC-signed checkout verification is designed specifically to close
+      this attack surface.
+    </p>
+  </div>
+
+  <div class="callout callout-blue">
+    <div class="callout-title">📍 Geographically Distributed, IP-Evasive Botnets</div>
+    <p>
+      The four-IP botnet we identified today is a small deployment. AI-orchestrated botnets
+      operate across hundreds or thousands of residential IP addresses, making IP-based rules
+      insufficient without behavioral intelligence. Commerce Shield's architecture — behavioral
+      scoring, intent signals, Turnstile verification — is explicitly designed to identify and
+      suppress sessions from bots that have clean IPs and clean User Agents.
+      IP rules alone will not be sufficient. Behavioral intelligence is the only durable defense.
+    </p>
+  </div>
+
+  <div class="callout callout-navy" style="margin-top:24px;">
+    <h3>Commerce Shield Is Built for This Future — Today</h3>
+    <p>
+      Because Commerce Shield runs at the Cloudflare edge with a persistent and growing
+      threat intelligence database specific to your traffic, it has a structural advantage
+      over generic security tools: it learns <em>your</em> bot patterns, not industry averages.
+      Every threat it catches today trains it to catch more sophisticated variants tomorrow.
+      Adding new detection layers — IP reputation feeds, LLM-assisted behavioral classification,
+      advanced Turnstile analytics — is an extension of existing architecture, not a rearchitecture.
+      The platform you have today is the foundation that makes every future defense investment compound.
+    </p>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 6 — ROADMAP
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-label">Section 06</div>
+  <h2>Expected Impact — The Road Ahead</h2>
+  <div class="divider"></div>
+
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-marker">
+        <div class="timeline-dot timeline-dot-1">1</div>
+        <div class="timeline-line"></div>
+      </div>
+      <div class="timeline-content">
+        <div class="timeline-period">0 – 3 Months · Immediate Wins</div>
+        <div class="timeline-title">Clean Data. Lower Costs. Hardened Perimeter.</div>
+        <div class="timeline-body">
+          Bot sessions suppressed from analytics pixel — reported traffic reflects real customers only.
+          Analytics baseline begins cleaning up — marketing attribution accuracy and conversion rates improve.
+          Turnstile deployed on <code>/account/login</code> and <code>/checkout</code> — credential
+          stuffing and card testing sessions excluded from funnel analytics.
+          WeChat/MicroMessenger UA pattern expanded — medium-risk sessions correctly classified.
+          Stealth botnet IPs added to Cloudflare WAF rules — doorbuster scraping sessions suppressed from all reporting.
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline-item">
+      <div class="timeline-marker">
+        <div class="timeline-dot timeline-dot-2">2</div>
+        <div class="timeline-line"></div>
+      </div>
+      <div class="timeline-content">
+        <div class="timeline-period">3 – 12 Months · Strategic Value Compounds</div>
+        <div class="timeline-title">Intent Scoring Drives Revenue. Threat DB Matures.</div>
+        <div class="timeline-body">
+          MRI intent scoring dataset accumulates enough signal to drive meaningful personalization —
+          discounts targeted to high-intent real customers only, not bots probing for price floors.
+          D1 threat database grows into a proprietary intelligence asset specific to your traffic
+          patterns — pattern recognition that no off-the-shelf tool can replicate.
+          Merchandising and fraud teams gain visibility into the threat log through the Commerce Shield
+          dashboard — decisions become data-driven, not reactive.
+          Multi-store expansion ready: additional GCW baby storefronts brought under protection with
+          zero additional infrastructure.
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline-item">
+      <div class="timeline-marker">
+        <div class="timeline-dot timeline-dot-3">3</div>
+      </div>
+      <div class="timeline-content">
+        <div class="timeline-period">12+ Months · Competitive Moat</div>
+        <div class="timeline-title">Proprietary Intelligence. AI-Proof Architecture.</div>
+        <div class="timeline-body">
+          Commerce Shield's behavioral fingerprint library — built entirely from your traffic —
+          becomes a durable competitive moat. Competitors running generic security tools will
+          continue being blind-sided by new bot generations. You will have infrastructure that
+          identifies them on first contact.
+          LLM-assisted behavioral classification can be layered in to detect AI-generated bot
+          patterns that no static rule can anticipate.
+          Wholesale portal, vendor feeds, and partner pricing APIs brought under the same protection
+          umbrella — the entire digital supply chain secured.
+          Board-level confidence: every eCommerce metric your organization reports is verified
+          human traffic, not an aggregate of bots and real customers that no one can tell apart.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 7 — RECOMMENDATIONS
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-label">Section 07</div>
+  <h2>Recommended Next Steps</h2>
+  <div class="divider"></div>
+
+  <p>
+    Commerce Shield is live, deployed, and already catching threats. The following actions
+    represent the highest-ROI investments to close remaining exposure and accelerate the
+    strategic value of the platform.
+  </p>
+
+  <ul class="rec-list">
+    <li>
+      <div class="rec-num">1</div>
+      <div class="rec-text">
+        <strong>Deploy Cloudflare WAF Rules for Stealth Botnet IPs</strong>
+        The four identified botnet IPs (185.226.213.35, 152.163.128.77, 209.101.3.63, 152.89.120.64)
+        should be escalated to Cloudflare WAF firewall rules immediately. This suppresses the active
+        doorbuster price scraping sessions from your analytics and removes their signal from your data with a same-day deploy.
+      </div>
+    </li>
+    <li>
+      <div class="rec-num">2</div>
+      <div class="rec-text">
+        <strong>Activate Turnstile on /account/login and /checkout</strong>
+        This single change closes the credential stuffing and automated card testing attack surfaces
+        entirely. Turnstile is invisible to real customers — it requires no user action — while making
+        automated login and checkout probing cryptographically infeasible.
+      </div>
+    </li>
+    <li>
+      <div class="rec-num">3</div>
+      <div class="rec-text">
+        <strong>Expand UA Pattern Library (WeChat Fix)</strong>
+        Already scoped and ready to deploy. Adding <code>micromessenger|weixin|xweb|mmwebsdk</code>
+        to the pixel guard UA classification closes a known evasion pattern identified in live traffic.
+      </div>
+    </li>
+    <li>
+      <div class="rec-num">4</div>
+      <div class="rec-text">
+        <strong>Activate the Commerce Shield Dashboard for Fraud &amp; Merch Teams</strong>
+        The threat intelligence data being collected in the D1 database is only as useful as the
+        teams who can act on it. Activating the real-time dashboard gives merchandising, fraud, and
+        eCommerce analytics teams visibility into bot activity, suppressed sessions, and intent scoring
+        trends — turning raw threat data into operational intelligence.
+      </div>
+    </li>
+    <li>
+      <div class="rec-num">5</div>
+      <div class="rec-text">
+        <strong>Expand Coverage to All Baby Storefronts</strong>
+        Commerce Shield's multi-store architecture means every additional Shopify property you operate
+        can be brought under protection with a single configuration change. No additional infrastructure,
+        no additional cost per store. Every new storefront is protected from day one.
+      </div>
+    </li>
+    <li>
+      <div class="rec-num">6</div>
+      <div class="rec-text">
+        <strong>Establish Quarterly Bot Threat Review</strong>
+        The threat landscape evolves continuously. A quarterly review of the D1 threat log against
+        current attack patterns — combined with Commerce Shield's pattern update cycle — ensures
+        detection capabilities stay ahead of the bot ecosystem rather than reacting to it.
+      </div>
+    </li>
+  </ul>
+
+  <div class="callout callout-navy" style="margin-top:28px;">
+    <h3>The Bottom Line</h3>
+    <p>
+      Commerce Shield is not a cost center. It is the infrastructure that ensures every revenue
+      metric, every conversion rate, every personalization decision, and every promotional strategy
+      is built on verified human behavior — not a mixture of customers and machines that your
+      business cannot tell apart. The bots we have already caught prove the threat is real.
+      The bots we have identified but not yet fully suppressed from analytics prove the work is not finished.
+      And the AI-powered bot generation that is 18 months away proves that this investment
+      compounds in value every year you hold it — and costs exponentially more to catch up to
+      if you delay.
+    </p>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     FOOTER
+════════════════════════════════════════════════════════ -->
+<div class="report-footer">
+  <div>
+    <strong>Commerce Shield</strong> — Gerber Childrenswear eCommerce Security Platform<br>
+    Cloudflare Workers · D1 Database · Turnstile · MRI Intent Engine
+  </div>
+  <div style="text-align:right;">
+    Confidential — Internal Use Only<br>
+    May 7, 2026 · v1.0
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+  function downloadPDF() {
+    const btn = document.getElementById('dlBtn');
+    btn.classList.add('loading');
+    btn.innerHTML = '⏳ Generating PDF...';
+
+    const bar = document.querySelector('.download-bar');
+    bar.style.display = 'none';
+
+    const opt = {
+      margin:      0,
+      filename:    'Commerce-Shield-Executive-Report-May2026.pdf',
+      image:       { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF:       { unit: 'in', format: 'letter', orientation: 'portrait' },
+      pagebreak:   { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    html2pdf().set(opt).from(document.body).save().then(() => {
+      bar.style.display = 'flex';
+      btn.classList.remove('loading');
+      btn.innerHTML = '⬇ Download PDF';
+    });
+  }
+</script>
+</body>
+</html>

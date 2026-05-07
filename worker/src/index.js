@@ -848,7 +848,13 @@ function deriveAppHealthStatus(findings) {
 }
 
 function buildPixelGuardThemeSnippet(shop, workerOrigin) {
-  const scriptUrl = `${workerOrigin.replace(/\/$/, "")}/cs-pixel-guard.js?shop=${encodeURIComponent(shop)}`;
+  // Serve via Render proxy to avoid blowing the workers.dev free request quota.
+  // Render caches the script in-memory and downstream browsers cache for 24h,
+  // so the worker is only hit once per ~24h per (shop, mode) variant.
+  // Bot event POSTs (rare) still go straight to the worker via the script's
+  // baked-in `apiBase`.
+  const PIXEL_GUARD_PROXY_HOST = "https://commerce-shield.onrender.com";
+  const scriptUrl = `${PIXEL_GUARD_PROXY_HOST}/cs-pixel-guard.js?shop=${encodeURIComponent(shop)}`;
   return `  <!-- ${PIXEL_GUARD_MARKER} -->\n  <script src="${scriptUrl}"></script>\n`;
 }
 

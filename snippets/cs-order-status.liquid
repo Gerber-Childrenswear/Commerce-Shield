@@ -18,7 +18,10 @@
 <script>
 (function() {
   var shop = {{ shop.permanent_domain | json }};
-  var origin = 'https://commerce-shield-prod.ncassidy.workers.dev';
+  // Loaded via the Render proxy (commerce-shield.onrender.com) which caches
+  // the script and forwards bot-event POSTs to the Cloudflare worker.
+  // This keeps the worker under its 100k/day free quota.
+  var origin = 'https://commerce-shield.onrender.com';
   var s = document.createElement('script');
   s.src = origin + '/cs-pixel-guard.js?shop=' + encodeURIComponent(shop) + '&enabled=1';
   s.async = true;

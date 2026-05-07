@@ -96,6 +96,9 @@ app.get('/cs-pixel-guard.js', async (req, res) => {
 // Health check
 app.get('/api/health', (_req, res) => res.json({ ok: true, timestamp: new Date().toISOString() }));
 
+// Explicit static file routes (belt-and-suspenders alongside express.static)
+app.get('/commerce-shield-report.html', (_req, res) => res.sendFile('commerce-shield-report.html', { root: 'public' }));
+
 // Catch-all -> index.html
 app.get('*', (_req, res) => res.sendFile('index.html', { root: 'public' }));
 

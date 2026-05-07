@@ -174,7 +174,7 @@ function topN(map, n) {
 // ===========================================================================
 const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || 'dc386b789af148f54d80b54d07e63215';
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
-const SHOPIFY_SCOPES = 'read_products,write_products,read_orders,write_orders,read_discounts,write_discounts,read_script_tags,write_script_tags,read_themes,write_themes,read_metafields,write_metafields';
+const SHOPIFY_SCOPES = 'read_products,write_products,read_orders,write_orders,read_discounts,write_discounts,read_script_tags,write_script_tags,read_themes,write_themes';
 const OAUTH_REDIRECT_URI = process.env.SHOPIFY_APP_URL
   ? `${process.env.SHOPIFY_APP_URL.replace(/\/$/, '')}/auth/callback`
   : 'https://commerce-shield.onrender.com/auth/callback';

@@ -31,10 +31,11 @@ app.use(express.json({ limit: '100kb' }));
 // Security headers — MUST be before express.static so static files get them too
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
+  // Allow Shopify to embed this app in an iframe
+  // X-Frame-Options is intentionally omitted; CSP frame-ancestors handles it
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('X-XSS-Protection', '0');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors https://*.myshopify.com https://admin.shopify.com");
   res.removeHeader('X-Powered-By');
   next();
 });

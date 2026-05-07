@@ -1,18 +1,5 @@
 import React, { useEffect, useState } from 'react';
 
-const CACHE_KEY_METRICS = 'cs_mri_metrics_cache';
-const CACHE_KEY_MRI_CONFIG = 'cs_mri_config_cache';
-
-function readCache<T>(key: string): { data: T; savedAt: string } | null {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-function writeCache<T>(key: string, data: T) {
-  try { localStorage.setItem(key, JSON.stringify({ data, savedAt: new Date().toISOString() })); } catch {}
-}
-
 interface MRIMetrics {
   revenue_saved: number;
   conversion_lift: number;
@@ -30,28 +17,10 @@ interface MRIConfig {
   profit_maximization: boolean;
 }
 
-const MRI_DEFAULTS: MRIConfig = {
-  enabled: false,
-  ui_mode: 'bloomreach',
-  discount_optimization: false,
-  coupon_abuse_prevention: false,
-  bot_protection: false,
-  profit_maximization: false,
-};
-
-const METRICS_DEFAULTS: MRIMetrics = {
-  revenue_saved: 0,
-  conversion_lift: 0,
-  coupon_abuse_prevented: 0,
-  bot_traffic_blocked: 0,
-  channel_breakdown: [],
-};
-
 export const MRIEngine: React.FC = () => {
   const [metrics, setMetrics] = useState<MRIMetrics | null>(null);
   const [config, setConfig] = useState<MRIConfig | null>(null);
   const [status, setStatus] = useState('');
-  const [staleAt, setStaleAt] = useState('');
   const [aiOverview, setAIOverview] = useState<string[]>([]);
   const [aiLoading, setAILoading] = useState(false);
 
@@ -62,46 +31,21 @@ export const MRIEngine: React.FC = () => {
   }, []);
 
   const fetchMetrics = async () => {
-    try {
-      const res = await fetch('/api/metrics');
-      if (res.ok) {
-        const data = await res.json();
-        setMetrics(data);
-        writeCache(CACHE_KEY_METRICS, data);
-      } else throw new Error(`${res.status}`);
-    } catch {
-      const cached = readCache<MRIMetrics>(CACHE_KEY_METRICS);
-      setMetrics(cached ? cached.data : METRICS_DEFAULTS);
-      if (cached && !staleAt) setStaleAt(cached.savedAt);
-    }
+    const res = await fetch('/api/metrics');
+    if (res.ok) setMetrics(await res.json());
   };
   const fetchConfig = async () => {
-    try {
-      const res = await fetch('/api/mri-config');
-      if (res.ok) {
-        const data = await res.json();
-        setConfig(data);
-        writeCache(CACHE_KEY_MRI_CONFIG, data);
-      } else throw new Error(`${res.status}`);
-    } catch {
-      const cached = readCache<MRIConfig>(CACHE_KEY_MRI_CONFIG);
-      setConfig(cached ? cached.data : MRI_DEFAULTS);
-      if (cached && !staleAt) setStaleAt(cached.savedAt);
-    }
+    const res = await fetch('/api/mri-config');
+    if (res.ok) setConfig(await res.json());
   };
   const fetchAIOverview = async () => {
     setAILoading(true);
-    try {
-      const res = await fetch('/api/mri-overview');
-      if (res.ok) {
-        const data = await res.json();
-        setAIOverview(data.issues || []);
-      }
-    } catch {
-      // non-critical — leave aiOverview empty
-    } finally {
-      setAILoading(false);
+    const res = await fetch('/api/mri-overview');
+    if (res.ok) {
+      const data = await res.json();
+      setAIOverview(data.issues || []);
     }
+    setAILoading(false);
   };
   const handleConfigChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { id, value, type } = e.target;
@@ -126,7 +70,6 @@ export const MRIEngine: React.FC = () => {
   return (
     <div className="section card stack" style={{ maxWidth: 800, margin: '0 auto' }}>
       <h2 style={{ color: 'var(--gcw-text)' }}>Conversion MRI Engine</h2>
-      {staleAt && <div style={{ fontSize: 13, color: 'var(--gcw-subtext)', background: 'var(--gcw-bg-secondary)', padding: '6px 10px', borderRadius: 4, marginBottom: 12 }}>Backend unavailable — showing data from {new Date(staleAt).toLocaleString()}.</div>}
       <div style={{ background: 'var(--gcw-bg-secondary)', padding: 16, borderRadius: 8, marginBottom: 24 }}>
         <h3 style={{ color: 'var(--gcw-text)' }}>AI Overview</h3>
         {aiLoading ? <div style={{ color: 'var(--gcw-subtext)' }}>Loading AI insights...</div> : aiOverview.length > 0 ? (
@@ -166,7 +109,7 @@ export const MRIEngine: React.FC = () => {
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0, cursor: 'pointer' }}><input type="checkbox" id="profit_maximization" checked={config.profit_maximization} onChange={handleConfigChange} /> Profit Maximization</label>
           </fieldset>
           <div className="inline" style={{ marginTop: 16 }}>
-            <button type="button" onClick={handleSave} disabled={!!staleAt}>Save Settings</button>
+            <button type="button" onClick={handleSave}>Save Settings</button>
             <button type="button" onClick={fetchMetrics} className="secondary">Refresh Metrics</button>
           </div>
         </form>

@@ -1,22 +1,18 @@
-# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
-
-client_id = "dc386b789af148f54d80b54d07e63215"
+[app]
 name = "Commerce Shield"
-application_url = "https://commerce-shield.onrender.com/"
+client_id = "dc386b789af148f54d80b54d07e63215"
+application_url = "https://commerce-shield.ncassidy.workers.dev/"
 embedded = true
 
-[webhooks]
-api_version = "2025-10"
-
 [access_scopes]
-# Keep these aligned with server.js SHOPIFY_SCOPES used by the OAuth route.
-scopes = "read_discounts,write_discounts,read_orders,write_orders,read_products,write_products,read_script_tags,write_script_tags,read_themes,write_themes"
+scopes = "read_products,write_products,read_orders,write_orders,read_discounts,write_discounts,read_script_tags,write_script_tags,read_themes,write_themes"
 
 [auth]
 redirect_urls = [
-	"https://commerce-shield.onrender.com/auth/callback",
-	"https://commerce-shield.onrender.com/auth/callback/"
+  "https://commerce-shield.ncassidy.workers.dev/auth/callback"
 ]
 
-[build]
-dev_store_url = "gerberchildrenswear.myshopify.com"
+[webhooks]
+
+[development]
+store = "your-dev-store.myshopify.com"

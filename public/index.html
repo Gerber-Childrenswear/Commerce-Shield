@@ -1,14 +1,465 @@
 <!doctype html>
-<html lang="en">
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Commerce Shield</title>
-    <script type="module" crossorigin src="/assets/index-Cr77l6Ga.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-DT0TJjHH.css">
+    <style>
+      body { font-family: Arial, Helvetica, sans-serif; margin: 24px; }
+      label { display:block; margin-top: 12px }
+      input[type=text], textarea { width: 320px; }
+      button { margin-top: 12px; }
+      .status { margin-top: 12px; color: green }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+
+    <h1>Commerce Shield</h1>
+    <nav style="margin-bottom: 24px;">
+      <button id="tab-discount" class="tab-btn" style="margin-right: 8px;">Discount Manager</button>
+      <button id="tab-mri" class="tab-btn" style="margin-right: 8px;">Conversion MRI Engine</button>
+      <button id="tab-health" class="tab-btn">App Health-Check</button>
+    </nav>
+    <div id="tab-content-health" style="display:none;">
+      <h2>Shopify App Health-Check</h2>
+      <div id="health-loading">Loading app health data...</div>
+      <table id="health-table" border="1" cellpadding="6" style="border-collapse:collapse;display:none;width:100%;margin-top:16px;">
+        <thead>
+          <tr>
+            <th>App Name</th>
+            <th>Code Injected</th>
+            <th>Needs Update</th>
+            <th>Usage</th>
+            <th>Errors/Misconfig</th>
+            <th>Theme File Conflicts</th>
+            <th>Performance Impact</th>
+            <th>API Rate Limit</th>
+            <th>Uninstalled App Residue</th>
+            <th>Webhook Failures</th>
+            <th>Usage Trend</th>
+            <th>Security Vulnerabilities</th>
+            <th>Script Errors</th>
+          </tr>
+        </thead>
+        <tbody id="health-tbody"></tbody>
+      </table>
+      <div id="health-none" style="display:none;color:#888;">No apps found.</div>
+    </div>
+
+    <div id="tab-content-discount">
+      <form id="configForm">
+        <label>Discount Percent (0-100)
+          <input id="percent" type="text" />
+        </label>
+        <label>Active
+          <select id="active"><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>Notes (optional)
+          <textarea id="notes" rows="4"></textarea>
+        </label>
+        <button type="submit">Save</button>
+      </form>
+      <div class="status" id="status"></div>
+
+      <div id="recent-visits-section" style="margin-top:32px;">
+        <div style="display:flex;align-items:center;">
+          <h3 style="margin:0;">Recent Visits (last 7 days)</h3>
+          <button id="expand-visits" style="margin-left:12px;">Expand</button>
+          <label style="margin-left:24px;">
+            <input type="checkbox" id="filter-bots" /> Show bots only
+          </label>
+        </div>
+        <div id="visits-summary" style="margin-top:8px;"></div>
+        <div id="visits-full-list" style="display:none;margin-top:12px;">
+          <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Referrer</th>
+                <th>Page</th>
+                <th>Bot?</th>
+                <th>User Agent / IP</th>
+                <th>Channel</th>
+              </tr>
+            </thead>
+            <tbody id="visits-tbody"></tbody>
+          </table>
+          <div id="visits-analytics" style="margin-top:16px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-content-mri" style="display:none;">
+      <h2>Conversion MRI Engine</h2>
+      <div id="mri-ai-overview" style="background:#f6f6f6;padding:16px;border-radius:8px;margin-bottom:24px;display:none;">
+        <h3>AI Overview</h3>
+        <div id="mri-ai-loading">Loading AI insights...</div>
+        <ul id="mri-ai-list" style="display:none;"></ul>
+        <div id="mri-ai-none" style="display:none;color:#888;">No issues detected. All systems healthy.</div>
+      </div>
+      <div id="mri-metrics">
+        <h3>Key Metrics</h3>
+        <ul>
+          <li><b>Revenue Saved:</b> <span id="mri-revenue-saved">Loading...</span></li>
+          <li><b>Conversion Lift:</b> <span id="mri-conversion-lift">Loading...</span></li>
+          <li><b>Coupon Abuse Prevented:</b> <span id="mri-coupon-abuse">Loading...</span></li>
+          <li><b>Bot Traffic Blocked:</b> <span id="mri-bot-blocked">Loading...</span></li>
+          <li><b>Channel Breakdown:</b> <span id="mri-channel-breakdown">Loading...</span></li>
+        </ul>
+      </div>
+      <div id="mri-controls">
+        <h3>Engine Controls</h3>
+        <form id="mri-config-form">
+          <label>
+            <b>Enable Conversion MRI Engine:</b>
+            <input type="checkbox" id="mri-enabled" />
+          </label>
+          <label style="display:block;margin-top:12px;">
+            <b>UI Mode:</b>
+            <select id="mri-ui-mode">
+              <option value="bloomreach">Bloomreach Weblayers</option>
+              <option value="custom">Custom UI</option>
+              <option value="both">Both</option>
+            </select>
+          </label>
+          <fieldset style="margin-top:12px;">
+            <legend><b>Features</b></legend>
+            <label><input type="checkbox" id="mri-discount-opt" /> Discount Optimization</label><br />
+            <label><input type="checkbox" id="mri-coupon-abuse" /> Coupon Abuse Prevention</label><br />
+            <label><input type="checkbox" id="mri-bot-protect" /> Bot Protection</label><br />
+            <label><input type="checkbox" id="mri-profit-max" /> Profit Maximization</label>
+          </fieldset>
+          <button type="button" id="mri-save" style="margin-top:12px;">Save Settings</button>
+          <button type="button" id="mri-refresh" style="margin-left:8px;">Refresh Metrics</button>
+        </form>
+      </div>
+      <div id="mri-status" style="margin-top:12px;color:green;"></div>
+    </div>
+
+    <script>
+      // -----------------------------------------------------------------------
+      // XSS prevention — escape untrusted strings before inserting into HTML
+      // -----------------------------------------------------------------------
+      function escapeHtml(str) {
+        if (str == null) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      // -----------------------------------------------------------------------
+      // Authenticated fetch — prompts for token on 401/403, caches in session
+      // -----------------------------------------------------------------------
+      let authToken = sessionStorage.getItem('cs_token') || '';
+
+      async function apiFetch(url, opts) {
+        opts = opts || {};
+        const headers = Object.assign({}, opts.headers || {});
+        if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+        const res = await fetch(url, Object.assign({}, opts, { headers: headers }));
+        if (res.status === 401 || res.status === 403) {
+          var token = prompt('Enter Commerce Shield admin token:');
+          if (token) {
+            authToken = token;
+            sessionStorage.setItem('cs_token', token);
+            headers['Authorization'] = 'Bearer ' + token;
+            return fetch(url, Object.assign({}, opts, { headers: headers }));
+          }
+        }
+        return res;
+      }
+
+      // -----------------------------------------------------------------------
+      // Tab switching
+      // -----------------------------------------------------------------------
+      var tabDiscount = document.getElementById('tab-discount');
+      var tabMRI = document.getElementById('tab-mri');
+      var tabHealth = document.getElementById('tab-health');
+      var contentDiscount = document.getElementById('tab-content-discount');
+      var contentMRI = document.getElementById('tab-content-mri');
+      var contentHealth = document.getElementById('tab-content-health');
+
+      tabDiscount.onclick = function () {
+        contentDiscount.style.display = '';
+        contentMRI.style.display = 'none';
+        contentHealth.style.display = 'none';
+        tabDiscount.disabled = true;
+        tabMRI.disabled = false;
+        tabHealth.disabled = false;
+      };
+      tabMRI.onclick = function () {
+        contentDiscount.style.display = 'none';
+        contentMRI.style.display = '';
+        contentHealth.style.display = 'none';
+        tabDiscount.disabled = false;
+        tabMRI.disabled = true;
+        tabHealth.disabled = false;
+        loadMRIMetrics();
+        loadMRIConfig();
+        loadMRIAIOverview();
+      };
+      tabHealth.onclick = function () {
+        contentDiscount.style.display = 'none';
+        contentMRI.style.display = 'none';
+        contentHealth.style.display = '';
+        tabDiscount.disabled = false;
+        tabMRI.disabled = false;
+        tabHealth.disabled = true;
+        loadAppHealth();
+      };
+      tabDiscount.disabled = true;
+
+      // -----------------------------------------------------------------------
+      // Recent Visits
+      // -----------------------------------------------------------------------
+      var visitsExpanded = false;
+      document.getElementById('expand-visits').onclick = function () {
+        visitsExpanded = !visitsExpanded;
+        document.getElementById('visits-full-list').style.display = visitsExpanded ? '' : 'none';
+        document.getElementById('expand-visits').textContent = visitsExpanded ? 'Collapse' : 'Expand';
+        if (visitsExpanded) loadRecentVisits();
+      };
+      document.getElementById('filter-bots').onchange = function () {
+        if (visitsExpanded) loadRecentVisits();
+      };
+
+      async function loadRecentVisits() {
+        var botsOnly = document.getElementById('filter-bots').checked;
+        var res = await apiFetch('/api/recent-visits?bots=' + (botsOnly ? '1' : '0'));
+        var data = await res.json();
+        document.getElementById('visits-summary').textContent = data.summary;
+        var tbody = document.getElementById('visits-tbody');
+        tbody.innerHTML = '';
+        (data.visits || []).forEach(function (v) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + escapeHtml(v.timestamp) + '</td>' +
+            '<td>' + escapeHtml(v.referrer) + '</td>' +
+            '<td>' + escapeHtml(v.page) + '</td>' +
+            '<td>' + (v.is_bot ? '<span style="color:red;">Yes</span>' : 'No') + '</td>' +
+            '<td>' + escapeHtml(v.user_agent) + ' / ' + escapeHtml(v.ip) + '</td>' +
+            '<td>' + escapeHtml(v.channel) + '</td>';
+          tbody.appendChild(tr);
+        });
+        var a = data.analytics || {};
+        var fmt = function (arr) {
+          return (arr || []).map(function (x) {
+            return escapeHtml(x.name) + ' (' + x.count + ')';
+          }).join(', ');
+        };
+        document.getElementById('visits-analytics').innerHTML =
+          '<b>Top Referrers:</b> ' + fmt(a.top_referrers) + '<br />' +
+          '<b>Top Landing Pages:</b> ' + fmt(a.top_landings) + '<br />' +
+          '<b>Common User Agents:</b> ' + fmt(a.top_agents) + '<br />' +
+          '<b>Peak Bot Times:</b> ' + (a.peak_bot_times || []).map(function (x) {
+            return 'Hour ' + x.hour + ' (' + x.count + ')';
+          }).join(', ');
+      }
+
+      // -----------------------------------------------------------------------
+      // MRI AI Overview
+      // -----------------------------------------------------------------------
+      async function loadMRIAIOverview() {
+        var aiBox = document.getElementById('mri-ai-overview');
+        aiBox.style.display = 'none';
+        document.getElementById('mri-ai-loading').style.display = '';
+        document.getElementById('mri-ai-list').style.display = 'none';
+        document.getElementById('mri-ai-none').style.display = 'none';
+        try {
+          var res = await apiFetch('/api/mri-overview');
+          if (!res.ok) throw new Error('Failed to load AI overview');
+          var data = await res.json();
+          if (data.show) {
+            aiBox.style.display = '';
+            if (Array.isArray(data.issues) && data.issues.length > 0) {
+              var ul = document.getElementById('mri-ai-list');
+              ul.innerHTML = '';
+              data.issues.forEach(function (issue) {
+                var li = document.createElement('li');
+                li.textContent = issue;
+                ul.appendChild(li);
+              });
+              ul.style.display = '';
+              document.getElementById('mri-ai-none').style.display = 'none';
+            } else {
+              document.getElementById('mri-ai-list').style.display = 'none';
+              document.getElementById('mri-ai-none').style.display = '';
+            }
+          } else {
+            aiBox.style.display = 'none';
+          }
+        } catch (err) {
+          aiBox.style.display = 'none';
+        } finally {
+          document.getElementById('mri-ai-loading').style.display = 'none';
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // App Health-Check
+      // -----------------------------------------------------------------------
+      async function loadAppHealth() {
+        document.getElementById('health-loading').style.display = '';
+        document.getElementById('health-table').style.display = 'none';
+        document.getElementById('health-none').style.display = 'none';
+        try {
+          var res = await apiFetch('/api/app-health');
+          if (!res.ok) throw new Error('Failed to load app health');
+          var data = await res.json();
+          if (Array.isArray(data.apps) && data.apps.length > 0) {
+            var tbody = document.getElementById('health-tbody');
+            tbody.innerHTML = '';
+            data.apps.forEach(function (app) {
+              var tr = document.createElement('tr');
+              tr.innerHTML =
+                '<td>' + escapeHtml(app.name) + '</td>' +
+                '<td>' + (app.code_injected ? 'Yes' : 'No') + '</td>' +
+                '<td>' + (app.needs_update ? 'Yes' : 'No') + '</td>' +
+                '<td>' + escapeHtml(app.usage || 'Unused') + '</td>' +
+                '<td>' + escapeHtml(app.errors || '') + '</td>' +
+                '<td>' + escapeHtml(app.theme_conflicts || '') + '</td>' +
+                '<td>' + escapeHtml(app.performance_impact || '') + '</td>' +
+                '<td>' + escapeHtml(app.api_rate_limit || '') + '</td>' +
+                '<td>' + escapeHtml(app.uninstalled_residue || '') + '</td>' +
+                '<td>' + escapeHtml(app.webhook_failures || '') + '</td>' +
+                '<td>' + escapeHtml(app.usage_trend || '') + '</td>' +
+                '<td>' + escapeHtml(app.security_vulns || '') + '</td>' +
+                '<td>' + escapeHtml(app.script_errors || '') + '</td>';
+              tbody.appendChild(tr);
+            });
+            document.getElementById('health-table').style.display = '';
+          } else {
+            document.getElementById('health-none').style.display = '';
+          }
+        } catch (err) {
+          document.getElementById('health-none').textContent = 'Error loading app health.';
+          document.getElementById('health-none').style.display = '';
+        } finally {
+          document.getElementById('health-loading').style.display = 'none';
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // Discount Config
+      // -----------------------------------------------------------------------
+      async function loadDiscountConfig() {
+        try {
+          var res = await apiFetch('/api/config');
+          var body = await res.json();
+          var cfg = body.config || { percent: 10, active: true, notes: '' };
+          document.getElementById('percent').value = cfg.percent != null ? cfg.percent : '';
+          document.getElementById('active').value = cfg.active ? 'true' : 'false';
+          document.getElementById('notes').value = cfg.notes != null ? cfg.notes : '';
+        } catch (err) {
+          document.getElementById('status').textContent = 'Error loading config.';
+          document.getElementById('status').style.color = 'red';
+        }
+      }
+
+      document.getElementById('configForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var payload = {
+          percent: Number(document.getElementById('percent').value) || 0,
+          active: document.getElementById('active').value === 'true',
+          notes: document.getElementById('notes').value || ''
+        };
+        try {
+          var res = await apiFetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            document.getElementById('status').textContent = 'Saved.';
+            document.getElementById('status').style.color = 'green';
+          } else {
+            var txt = await res.text();
+            document.getElementById('status').textContent = 'Error: ' + txt;
+            document.getElementById('status').style.color = 'red';
+          }
+        } catch (err) {
+          document.getElementById('status').textContent = 'Error saving config.';
+          document.getElementById('status').style.color = 'red';
+        }
+      });
+
+      // -----------------------------------------------------------------------
+      // MRI Engine
+      // -----------------------------------------------------------------------
+      async function loadMRIMetrics() {
+        document.getElementById('mri-status').textContent = '';
+        try {
+          var res = await apiFetch('/api/metrics');
+          if (!res.ok) throw new Error('Failed to load metrics');
+          var data = await res.json();
+          document.getElementById('mri-revenue-saved').textContent = '$' + (data.revenue_saved != null ? data.revenue_saved.toFixed(2) : '0.00');
+          document.getElementById('mri-conversion-lift').textContent = ((data.conversion_lift || 0) * 100).toFixed(2) + '%';
+          document.getElementById('mri-coupon-abuse').textContent = data.coupon_abuse_prevented != null ? data.coupon_abuse_prevented : '0';
+          document.getElementById('mri-bot-blocked').textContent = data.bot_traffic_blocked != null ? data.bot_traffic_blocked : '0';
+          document.getElementById('mri-channel-breakdown').textContent = Array.isArray(data.channel_breakdown) && data.channel_breakdown.length > 0
+            ? data.channel_breakdown.map(function (c) { return c.channel + ': ' + c.discounts_given + ' discounts'; }).join('; ')
+            : 'N/A';
+        } catch (err) {
+          document.getElementById('mri-status').textContent = 'Error loading metrics.';
+          document.getElementById('mri-status').style.color = 'red';
+        }
+      }
+
+      async function loadMRIConfig() {
+        try {
+          var res = await apiFetch('/api/mri-config');
+          if (!res.ok) throw new Error('Failed to load config');
+          var cfg = await res.json();
+          document.getElementById('mri-enabled').checked = !!cfg.enabled;
+          document.getElementById('mri-ui-mode').value = cfg.ui_mode || 'bloomreach';
+          document.getElementById('mri-discount-opt').checked = !!cfg.discount_optimization;
+          document.getElementById('mri-coupon-abuse').checked = !!cfg.coupon_abuse_prevention;
+          document.getElementById('mri-bot-protect').checked = !!cfg.bot_protection;
+          document.getElementById('mri-profit-max').checked = !!cfg.profit_maximization;
+        } catch (err) {
+          document.getElementById('mri-enabled').checked = false;
+          document.getElementById('mri-ui-mode').value = 'bloomreach';
+          document.getElementById('mri-discount-opt').checked = false;
+          document.getElementById('mri-coupon-abuse').checked = false;
+          document.getElementById('mri-bot-protect').checked = false;
+          document.getElementById('mri-profit-max').checked = false;
+        }
+      }
+
+      async function saveMRIConfig() {
+        var payload = {
+          enabled: document.getElementById('mri-enabled').checked,
+          ui_mode: document.getElementById('mri-ui-mode').value,
+          discount_optimization: document.getElementById('mri-discount-opt').checked,
+          coupon_abuse_prevention: document.getElementById('mri-coupon-abuse').checked,
+          bot_protection: document.getElementById('mri-bot-protect').checked,
+          profit_maximization: document.getElementById('mri-profit-max').checked
+        };
+        try {
+          var res = await apiFetch('/api/mri-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error('Failed to save config');
+          document.getElementById('mri-status').textContent = 'Settings saved.';
+          document.getElementById('mri-status').style.color = 'green';
+        } catch (err) {
+          document.getElementById('mri-status').textContent = 'Error saving settings.';
+          document.getElementById('mri-status').style.color = 'red';
+        }
+      }
+
+      document.getElementById('mri-refresh').onclick = loadMRIMetrics;
+      document.getElementById('mri-save').onclick = saveMRIConfig;
+
+      // -----------------------------------------------------------------------
+      // Initial load
+      // -----------------------------------------------------------------------
+      loadDiscountConfig();
+    </script>
   </body>
 </html>

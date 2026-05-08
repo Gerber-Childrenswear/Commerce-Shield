@@ -758,7 +758,7 @@ async function fetchMainTheme(env, shop) {
     env,
     shop,
     `query CommerceShieldThemes {
-      themes(first: 10) {
+      themes(first: 1, roles: [MAIN]) {
         nodes {
           id
           name
@@ -770,7 +770,7 @@ async function fetchMainTheme(env, shop) {
   );
 
   const themeNodes = themesData?.themes?.nodes || [];
-  return themeNodes.find((theme) => theme.role === "MAIN") || themeNodes[0] || null;
+  return themeNodes.find((theme) => theme.role === "MAIN") || null;
 }
 
 async function fetchThemeTextFile(env, shop, themeId, filename) {
@@ -1040,7 +1040,7 @@ async function buildStoreAudit(env, shop) {
       env,
       shop,
       `query CommerceShieldThemes {
-        themes(first: 10) {
+        themes(first: 1, roles: [MAIN]) {
           nodes {
             id
             name
@@ -1052,7 +1052,7 @@ async function buildStoreAudit(env, shop) {
     );
 
     const themeNodes = themesData?.themes?.nodes || [];
-    const mainTheme = themeNodes.find((theme) => theme.role === "MAIN") || themeNodes[0] || null;
+    const mainTheme = themeNodes.find((theme) => theme.role === "MAIN") || null;
 
     const scriptTagsData = await shopifyAdminGraphql(
       env,

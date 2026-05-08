@@ -676,11 +676,19 @@ function getShopifyAccessToken(env, shop) {
   return parseShopifyAdminTokenMap(env)[shop] || "";
 }
 
+function buildShopifyAdminUrl(shop, apiVersion, path) {
+  // /oauth/* endpoints are mounted at /admin/oauth/* (no API version prefix)
+  if (path.startsWith("/oauth/")) {
+    return `https://${shop}/admin${path}`;
+  }
+  return `https://${shop}/admin/api/${apiVersion}${path}`;
+}
+
 async function shopifyAdminRestGet(env, shop, path) {
   const accessToken = getShopifyAccessToken(env, shop);
   if (!accessToken) throw new HttpError("Shopify Admin token is not configured for this shop", 503);
   const apiVersion = normalizeAdminApiVersion(env.SHOPIFY_ADMIN_API_VERSION);
-  const response = await fetch(`https://${shop}/admin/api/${apiVersion}${path}`, {
+  const response = await fetch(buildShopifyAdminUrl(shop, apiVersion, path), {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -699,7 +707,7 @@ async function shopifyAdminRestPut(env, shop, path, body) {
   const accessToken = getShopifyAccessToken(env, shop);
   if (!accessToken) throw new HttpError("Shopify Admin token is not configured for this shop", 503);
   const apiVersion = normalizeAdminApiVersion(env.SHOPIFY_ADMIN_API_VERSION);
-  const response = await fetch(`https://${shop}/admin/api/${apiVersion}${path}`, {
+  const response = await fetch(buildShopifyAdminUrl(shop, apiVersion, path), {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",

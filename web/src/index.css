@@ -1,0 +1,19 @@
+/* Global resets — see gcw-theme.css for design tokens */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}

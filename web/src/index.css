@@ -17,3 +17,13 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* Embedded admin already has Shopify chrome; hide duplicated in-app top bars. */
+ui-nav-menu,
+ui-title-bar,
+shopify-title-bar,
+[data-shopify-title-bar],
+#shopify-app-title-bar,
+#shopify-title-bar {
+  display: none !important;
+}

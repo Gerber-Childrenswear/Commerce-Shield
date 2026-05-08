@@ -50,6 +50,17 @@ const DATACENTER_ORG_HINTS = [
 const KNOWN_BAD_JA3 = new Set([
   // Add observed bot TLS fingerprints here as they are identified.
 ]);
+
+// Legitimate crawlers we WANT to allow (SEO, marketing, monitoring).
+// They still get analytics-pixel suppression (no marketing-pixel pollution),
+// but they are NEVER banned and are tagged is_legitimate=1 in stats so they
+// don't pollute "bad bot" counts in the dashboard.
+const LEGITIMATE_CRAWLER_REGEX = /(googlebot|googleother|google-inspectiontool|adsbot-google|mediapartners-google|apis-google|feedfetcher-google|bingbot|bingpreview|adidxbot|msnbot|slurp|yandexbot|yandeximages|baiduspider|duckduckbot|applebot|semrushbot|ahrefsbot|mj12bot|dotbot|seekport|screamingfrog|petalbot|bytespider|facebookexternalhit|twitterbot|linkedinbot|pinterestbot|redditbot|telegrambot|discordbot|slackbot|whatsapp|skypeuripreview|embedly|chrome-lighthouse|gtmetrix|pingdom|uptimerobot|statuscake|datadog|newrelic)/i;
+
+// Auto-ban thresholds for confirmed-bot IPs (desktop only, never legitimate).
+const BAN_STRIKE_THRESHOLD = 5;
+const BAN_STRIKE_WINDOW_SECONDS = 24 * 60 * 60;
+const BAN_DURATION_SECONDS = 7 * 24 * 60 * 60;
 const DEFAULT_ADMIN_SETTINGS = Object.freeze({
   intent: {
     sensitivity: 62,
@@ -261,6 +272,49 @@ function extractIp(request) {
     request.headers.get("x-real-ip") ||
     "unknown"
   );
+}
+
+async function isIpBanned(env, shop, ip) {
+  if (!ip || ip === "unknown") return false;
+  const row = await env.DB.prepare(
+    `SELECT 1 FROM banned_ips WHERE shop = ? AND ip = ? AND expires_at > datetime('now') LIMIT 1`
+  ).bind(shop, ip).first();
+  return Boolean(row);
+}
+
+// Records a strike for a confirmed-bot IP and auto-promotes to banned_ips
+// once the rolling-24h count crosses BAN_STRIKE_THRESHOLD. Never called for
+// legitimate crawlers or mobile traffic.
+async function recordBotStrike(env, shop, ip, reason) {
+  if (!ip || ip === "unknown") return;
+  const expiresAt = new Date(Date.now() + BAN_STRIKE_WINDOW_SECONDS * 1000).toISOString();
+  const row = await env.DB.prepare(
+    `INSERT INTO bot_ip_strikes (shop, ip, strike_count, expires_at)
+     VALUES (?, ?, 1, ?)
+     ON CONFLICT(shop, ip) DO UPDATE SET
+       strike_count = CASE
+         WHEN bot_ip_strikes.expires_at <= datetime('now') THEN 1
+         ELSE bot_ip_strikes.strike_count + 1
+       END,
+       last_strike_at = datetime('now'),
+       expires_at = CASE
+         WHEN bot_ip_strikes.expires_at <= datetime('now') THEN excluded.expires_at
+         ELSE bot_ip_strikes.expires_at
+       END
+     RETURNING strike_count`
+  ).bind(shop, ip, expiresAt).first();
+
+  if ((row?.strike_count || 0) >= BAN_STRIKE_THRESHOLD) {
+    const banExpires = new Date(Date.now() + BAN_DURATION_SECONDS * 1000).toISOString();
+    await env.DB.prepare(
+      `INSERT INTO banned_ips (shop, ip, reason, expires_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(shop, ip) DO UPDATE SET
+         reason = excluded.reason,
+         banned_at = datetime('now'),
+         expires_at = excluded.expires_at`
+    ).bind(shop, ip, sanitizeString(reason, 200) || "auto:bot_strikes", banExpires).run();
+  }
 }
 
 async function parseJsonRequest(request, maxBytes = MAX_JSON_BODY_BYTES) {
@@ -1423,6 +1477,8 @@ async function pruneSecurityTables(env, ctx) {
   const cleanup = env.DB.batch([
     env.DB.prepare(`DELETE FROM endpoint_nonces WHERE expires_at < datetime('now')`),
     env.DB.prepare(`DELETE FROM rate_limits WHERE expires_at < datetime('now')`),
+    env.DB.prepare(`DELETE FROM bot_ip_strikes WHERE expires_at < datetime('now')`),
+    env.DB.prepare(`DELETE FROM banned_ips WHERE expires_at < datetime('now')`),
   ]);
 
   if (ctx && typeof ctx.waitUntil === "function") {
@@ -1771,6 +1827,20 @@ async function handleStats(request, env, corsHeaders, ctx) {
   const normalizedShop = normalizeShopDomain(shop);
   if (!normalizedShop) throw new HttpError("Invalid shop", 400);
 
+  const ip = extractIp(request);
+
+  // If the UA is a known good crawler, force isLegitimate=true regardless of
+  // what the client claimed. Belt-and-suspenders against UA spoofing of legit
+  // bots that we want analytics-suppressed but never banned.
+  const uaString = sanitizeString(ua, 400);
+  const serverDetectedLegit = LEGITIMATE_CRAWLER_REGEX.test(uaString);
+  const finalIsLegitimate = isLegitimate === true || serverDetectedLegit;
+
+  // Drop banned IPs silently. Never apply to legitimate crawlers or mobile.
+  if (!finalIsLegitimate && !isMobile && await isIpBanned(env, normalizedShop, ip)) {
+    return jsonResponse({ ok: true, banned: true }, 200, corsHeaders);
+  }
+
   const today = new Date().toISOString().split("T")[0];
 
   // Cloudflare-native edge enrichment (threat score, botManagement, ASN/org hints, JA3/JA4).
@@ -1778,7 +1848,7 @@ async function handleStats(request, env, corsHeaders, ctx) {
   const finalIsBot = cfRisk.isBot;
   const finalBotScore = cfRisk.score;
   const finalConfidence = cfRisk.confidence;
-  const pixelProtected = finalIsBot && finalConfidence === "high" && !isLegitimate ? 1 : 0;
+  const pixelProtected = finalIsBot && finalConfidence === "high" && !finalIsLegitimate ? 1 : 0;
 
   const envSampleRate = Number(env.HUMAN_VISIT_SAMPLE_RATE);
   const humanVisitSampleRate = Number.isFinite(envSampleRate)
@@ -1794,7 +1864,7 @@ async function handleStats(request, env, corsHeaders, ctx) {
   const shouldPersistVisitRow =
     finalIsBot ||
     isCouponBot === true ||
-    isLegitimate === true ||
+    finalIsLegitimate === true ||
     finalBotScore >= suspiciousThreshold ||
     Math.random() < humanVisitSampleRate;
 
@@ -1834,7 +1904,7 @@ async function handleStats(request, env, corsHeaders, ctx) {
         Number(finalBotScore) || 0,
         sanitizeString(finalConfidence, 20) || "low",
         isMobile ? 1 : 0,
-        isLegitimate ? 1 : 0,
+        finalIsLegitimate ? 1 : 0,
         isCouponBot ? 1 : 0,
         sanitizeString(source, 80) || "direct",
         sanitizeString(page, 500),
@@ -1844,6 +1914,24 @@ async function handleStats(request, env, corsHeaders, ctx) {
   }
 
   await env.DB.batch(statements);
+
+  // Auto-ban: confirmed-bot desktop IPs accumulate strikes; legitimate crawlers
+  // and mobile traffic are never banned. Ban kicks in after BAN_STRIKE_THRESHOLD
+  // hits in a rolling 24h window.
+  if (
+    finalIsBot &&
+    finalConfidence === "high" &&
+    !finalIsLegitimate &&
+    !isMobile &&
+    ip !== "unknown"
+  ) {
+    const strike = recordBotStrike(env, normalizedShop, ip, `stats:${cfRisk.reasons?.[0] || "client_signal"}`);
+    if (ctx && typeof ctx.waitUntil === "function") {
+      ctx.waitUntil(strike.catch(() => {}));
+    } else {
+      await strike.catch(() => {});
+    }
+  }
 
   // Probabilistic cleanup — runs on ~0.5% of requests instead of every write.
   // At 500k writes/day this still prunes ~2,500 times per day, far more than needed.
@@ -1874,6 +1962,17 @@ async function handlePixelGuardEvent(request, env, corsHeaders, ctx) {
   const confidence = sanitizeString(body.confidence, 20).toLowerCase();
   const isBot = body.isBot === true;
   const pixelCount = clampNumber(body.count, 1, 1, 50);
+  const isMobile = body.isMobile === true;
+
+  // Server-side legitimate-crawler detection — belt-and-suspenders against
+  // UA-spoofed events claiming to be a bad bot when they're really googlebot.
+  const uaString = sanitizeString(body.ua, 400);
+  const isLegitimate = body.isLegitimate === true || LEGITIMATE_CRAWLER_REGEX.test(uaString);
+
+  // Drop banned IPs silently (legitimate + mobile are never banned).
+  if (!isLegitimate && !isMobile && await isIpBanned(env, shop, ip)) {
+    return jsonResponse({ ok: true, banned: true }, 200, corsHeaders);
+  }
 
   if (!isBot || confidence !== "high") {
     return jsonResponse({ ok: true, accepted: false }, 200, corsHeaders);
@@ -1886,6 +1985,16 @@ async function handlePixelGuardEvent(request, env, corsHeaders, ctx) {
      ON CONFLICT(shop, date) DO UPDATE SET
        pixels_protected = pixels_protected + ?`
   ).bind(shop, today, pixelCount, pixelCount).run();
+
+  // Record a strike toward auto-banning desktop bad-bot IPs. Never legitimate, never mobile.
+  if (!isLegitimate && !isMobile && ip !== "unknown") {
+    const strike = recordBotStrike(env, shop, ip, "pixel_guard:high_conf");
+    if (ctx && typeof ctx.waitUntil === "function") {
+      ctx.waitUntil(strike.catch(() => {}));
+    } else {
+      await strike.catch(() => {});
+    }
+  }
 
   return jsonResponse({ ok: true, accepted: true, pixelsProtected: pixelCount }, 200, corsHeaders);
 }
@@ -2219,6 +2328,10 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled) {
     const lowerUa = ua.toLowerCase();
     const hardUa = /(adsbot|applebot|baiduspider|bingbot|bot|crawler|curl|duckduckbot|facebookexternalhit|googlebot|headlesschrome|httpclient|lighthouse|micromessenger|mmwebsdk|phantomjs|playwright|prerender|puppeteer|python-requests|semrushbot|selenium|spider|wget|weixin|xweb\/|yandexbot)/i.test(ua);
     const automationUa = /(headlesschrome|phantomjs|playwright|puppeteer|selenium|webdriver|jsdom)/i.test(ua);
+    // Legitimate crawlers: still pixel-suppress (don't pollute marketing pixels),
+    // but tag isLegitimate=true so worker never auto-bans them.
+    const legitUa = /(googlebot|googleother|google-inspectiontool|adsbot-google|mediapartners-google|apis-google|feedfetcher-google|bingbot|bingpreview|adidxbot|msnbot|slurp|yandexbot|yandeximages|baiduspider|duckduckbot|applebot|semrushbot|ahrefsbot|mj12bot|dotbot|seekport|screamingfrog|petalbot|bytespider|facebookexternalhit|twitterbot|linkedinbot|pinterestbot|redditbot|telegrambot|discordbot|slackbot|whatsapp|skypeuripreview|embedly|chrome-lighthouse|gtmetrix|pingdom|uptimerobot|statuscake|datadog|newrelic)/i.test(ua);
+    const isMobileUa = /(mobile|android|iphone|ipad|ipod|blackberry|opera mini|iemobile)/i.test(ua);
 
     if (hardUa) {
       score = Math.max(score, 0.92);
@@ -2324,6 +2437,8 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled) {
     const highConfidence = score >= 0.9;
     return {
       isBot: highConfidence,
+      isLegitimate: legitUa,
+      isMobile: isMobileUa,
       confidence: highConfidence ? "high" : "low",
       botScore: Number(score.toFixed(2)),
       reasons
@@ -2459,6 +2574,8 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled) {
       shop: config.shop,
       count,
       isBot: true,
+      isLegitimate: decision.isLegitimate === true,
+      isMobile: decision.isMobile === true,
       confidence: decision.confidence,
       botScore: decision.botScore,
       reason: decision.reasons.join(","),

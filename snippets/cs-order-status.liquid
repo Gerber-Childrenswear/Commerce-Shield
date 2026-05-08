@@ -1,30 +1,19 @@
 {% comment %}
-  Commerce Shield — Order Status / Thank-You Page Analytics Suppression
+  Commerce Shield — Order Status / Thank-You Page
 
-  HOW TO USE:
-    Copy the <script> block below (not this comment) and paste it into:
-    Shopify Admin → Settings → Checkout → scroll to "Order status page"
-      → "Additional scripts" textarea → Save
+  POLICY:
+    A visitor reaching the order status / thank-you page has completed a real
+    purchase and is treated as a confirmed human. We do NOT load the pixel
+    guard here. All conversion pixels (GA4, Meta, etc.) MUST fire normally
+    so revenue attribution is preserved.
 
-  WHAT IT DOES:
-    Loads the Commerce Shield pixel guard on the order status / thank-you page.
-    Bots that bypassed the storefront and completed checkout directly will have
-    their GA4 and Meta Pixel analytics suppressed here.
+    This snippet is intentionally empty. It exists as a placeholder so the
+    "Additional scripts" textarea documents the policy and so future agents
+    know not to add suppression logic to the thank-you page.
 
-    Liquid variables ({{ }}) work inside "Additional scripts" so
-    shop.permanent_domain resolves correctly at render time.
+  WHERE THIS LIVES:
+    Shopify Admin → Settings → Checkout → "Order status page" →
+    "Additional scripts" textarea.
 {% endcomment %}
 
-<script>
-(function() {
-  var shop = {{ shop.permanent_domain | json }};
-  // Loaded via the Render proxy (commerce-shield.onrender.com) which caches
-  // the script and forwards bot-event POSTs to the Cloudflare worker.
-  // This keeps the worker under its 100k/day free quota.
-  var origin = 'https://commerce-shield.onrender.com';
-  var s = document.createElement('script');
-  s.src = origin + '/cs-pixel-guard.js?shop=' + encodeURIComponent(shop) + '&enabled=1';
-  s.async = true;
-  document.head.appendChild(s);
-})();
-</script>
+<!-- Commerce Shield: thank-you page is unsuppressed by design (purchaser = confirmed human) -->

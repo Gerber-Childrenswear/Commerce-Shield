@@ -92,6 +92,33 @@ CREATE TABLE IF NOT EXISTS admin_shop_settings (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Tracks confirmed-bot strikes per IP within a rolling window. Auto-promotes
+-- to banned_ips after >= BAN_STRIKE_THRESHOLD in 24h. Legitimate crawlers
+-- (googlebot, semrush, etc.) are never recorded here.
+CREATE TABLE IF NOT EXISTS bot_ip_strikes (
+  shop TEXT NOT NULL,
+  ip TEXT NOT NULL,
+  strike_count INTEGER NOT NULL DEFAULT 0,
+  first_strike_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_strike_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL,
+  PRIMARY KEY (shop, ip)
+);
+
+-- Confirmed-bot IPs banned from pixel-guard analytics endpoints.
+-- Legitimate crawlers and mobile traffic are NEVER banned.
+CREATE TABLE IF NOT EXISTS banned_ips (
+  shop TEXT NOT NULL,
+  ip TEXT NOT NULL,
+  reason TEXT,
+  banned_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL,
+  PRIMARY KEY (shop, ip)
+);
+
+CREATE INDEX IF NOT EXISTS idx_banned_ips_expires ON banned_ips(expires_at);
+CREATE INDEX IF NOT EXISTS idx_bot_ip_strikes_expires ON bot_ip_strikes(expires_at);
+
 CREATE INDEX IF NOT EXISTS idx_intent_events_shop_visitor_created ON intent_events(shop, visitor_key, created_at);
 CREATE INDEX IF NOT EXISTS idx_intent_profiles_shop_email ON intent_profiles(shop, email_hash);
 CREATE INDEX IF NOT EXISTS idx_intent_profiles_shop_customer ON intent_profiles(shop, customer_id);

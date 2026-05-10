@@ -111,7 +111,7 @@ const bannerCards: BannerCard[] = [
   },
 ];
 
-const appNav = ['Home', 'Orders', 'Products', 'Customers', 'Marketing', 'Discounts', 'Content', 'Markets', 'Finance', 'Analytics'];
+const appNav = ['Home', 'Orders', 'Products', 'Customers', 'Marketing', 'Discounts', 'Content', 'Markets', 'Finance', 'Analytics'] as const;
 
 const BADGES_STORAGE_KEY = 'gcw.flair.badges.v1';
 const BANNERS_STORAGE_KEY = 'gcw.flair.banners.v1';
@@ -749,6 +749,59 @@ function App() {
     setView(nextView);
   };
 
+  const openExternal = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const resolveShopDomain = (): string => {
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = (params.get('shop') ?? '').trim().toLowerCase();
+    if (/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(fromQuery)) return fromQuery;
+    return '';
+  };
+
+  const openShopifyAdminPath = (path: string) => {
+    const shop = resolveShopDomain();
+    if (!shop) {
+      setGuidanceMessage({
+        tone: 'warning',
+        title: 'Shop domain not detected',
+        detail: 'Unable to open Shopify Admin path because the current URL has no valid shop parameter.',
+      });
+      return;
+    }
+
+    const target = `https://${shop}${path}`;
+    window.open(target, '_top');
+  };
+
+  const handleShopifyNav = (item: typeof appNav[number]) => {
+    if (item === 'Home') {
+      navigateTo('overview');
+      return;
+    }
+
+    const paths: Partial<Record<typeof appNav[number], string>> = {
+      Orders: '/admin/orders',
+      Products: '/admin/products',
+      Customers: '/admin/customers',
+      Marketing: '/admin/marketing',
+      Discounts: '/admin/discounts',
+      Content: '/admin/content',
+      Markets: '/admin/settings/markets',
+      Finance: '/admin/settings/payments',
+      Analytics: '/admin/reports',
+    };
+
+    const path = paths[item];
+    if (!path) {
+      navigateTo('overview');
+      return;
+    }
+
+    openShopifyAdminPath(path);
+  };
+
   const openBadgeEditor = (index: number) => {
     if (!ensureEditorCanClose()) return;
     const draft = { ...badges[index] };
@@ -1102,7 +1155,7 @@ function App() {
           <ul className="gcw-sidebar-list">
             {appNav.map((item) => (
               <li key={item}>
-                <button type="button" className="gcw-sidebar-item" onClick={() => navigateTo('overview')}>
+                <button type="button" className="gcw-sidebar-item" onClick={() => handleShopifyNav(item)}>
                   {item}
                 </button>
               </li>
@@ -1199,6 +1252,11 @@ function App() {
               onImport={triggerImportFlairConfig}
               importMode={importMode}
               onImportModeChange={setImportMode}
+              onThemeSetup={() => openShopifyAdminPath('/admin/themes/current/editor')}
+              onThemeTriggers={() => navigateTo('banners')}
+              onBillingPlan={() => openShopifyAdminPath('/admin/charges')}
+              onLanguages={() => openShopifyAdminPath('/admin/settings/languages')}
+              onFlairGeneration={() => openExternal('https://help.shopify.com/en/manual/promoting-marketing')}
             />
           )}
 
@@ -1336,6 +1394,7 @@ function OverviewView({ onNavigate }: { onNavigate: (view: FlairView) => void })
         <h2>Product updates</h2>
         <p>February 2026</p>
         <p>Flair Promotions Now Support Native Translations</p>
+        <button type="button" className="gcw-secondary-btn gcw-mini-btn" onClick={() => onNavigate('settings')}>Open settings</button>
       </article>
 
       <article className="gcw-card">
@@ -1348,9 +1407,9 @@ function OverviewView({ onNavigate }: { onNavigate: (view: FlairView) => void })
         <h2>Help center</h2>
         <div className="gcw-help-layout">
           <ul>
-            <li>How to get started with Flair</li>
-            <li>How to run a Flair promotion</li>
-            <li>How to troubleshoot Flair</li>
+            <li><button type="button" className="gcw-help-link" onClick={() => onNavigate('badges')}>How to get started with Flair</button></li>
+            <li><button type="button" className="gcw-help-link" onClick={() => onNavigate('banners')}>How to run a Flair promotion</button></li>
+            <li><button type="button" className="gcw-help-link" onClick={() => onNavigate('settings')}>How to troubleshoot Flair</button></li>
           </ul>
           <article className="gcw-blog-card">
             <h4>FROM THE BLOG</h4>
@@ -1806,12 +1865,22 @@ function SettingsView({
   onImport,
   importMode,
   onImportModeChange,
+  onThemeSetup,
+  onThemeTriggers,
+  onBillingPlan,
+  onLanguages,
+  onFlairGeneration,
 }: {
   onResetAll: () => void;
   onExport: () => void;
   onImport: () => void;
   importMode: ImportMode;
   onImportModeChange: (mode: ImportMode) => void;
+  onThemeSetup: () => void;
+  onThemeTriggers: () => void;
+  onBillingPlan: () => void;
+  onLanguages: () => void;
+  onFlairGeneration: () => void;
 }) {
   const [enabled, setEnabled] = useState(true);
 
@@ -1826,16 +1895,16 @@ function SettingsView({
               {enabled ? 'Disable' : 'Enable'}
             </button>
           </li>
-          <li className="gcw-settings-row"><div><span>Billing plan</span><strong>Grow $49</strong></div><em>›</em></li>
-          <li className="gcw-settings-row"><div><span>Languages</span><strong>No additional languages enabled</strong></div><em>›</em></li>
-          <li className="gcw-settings-row"><div><span>Flair generation</span><strong>You're using Flair Gen 3.</strong></div><em>›</em></li>
+          <li className="gcw-settings-row"><div><span>Billing plan</span><strong>Grow $49</strong></div><button type="button" className="gcw-secondary-btn gcw-mini-btn" onClick={onBillingPlan}>Open</button></li>
+          <li className="gcw-settings-row"><div><span>Languages</span><strong>No additional languages enabled</strong></div><button type="button" className="gcw-secondary-btn gcw-mini-btn" onClick={onLanguages}>Open</button></li>
+          <li className="gcw-settings-row"><div><span>Flair generation</span><strong>You're using Flair Gen 3.</strong></div><button type="button" className="gcw-secondary-btn gcw-mini-btn" onClick={onFlairGeneration}>Learn</button></li>
         </ul>
       </article>
       <article className="gcw-card">
         <h2>Theme</h2>
         <ul className="gcw-settings-list">
-          <li className="gcw-settings-row"><div><span>Theme setup</span><strong>Configure Flair in your Shopify theme.</strong></div><em>›</em></li>
-          <li className="gcw-settings-row"><div><span>Theme triggers</span><strong>0 triggers configured</strong></div><em>›</em></li>
+          <li className="gcw-settings-row"><div><span>Theme setup</span><strong>Configure Flair in your Shopify theme.</strong></div><button type="button" className="gcw-secondary-btn gcw-mini-btn" onClick={onThemeSetup}>Open</button></li>
+          <li className="gcw-settings-row"><div><span>Theme triggers</span><strong>0 triggers configured</strong></div><button type="button" className="gcw-secondary-btn gcw-mini-btn" onClick={onThemeTriggers}>Open</button></li>
         </ul>
         <div className="gcw-settings-transfer-wrap">
           <button type="button" className="gcw-secondary-btn" onClick={onExport}>Export Flair config</button>

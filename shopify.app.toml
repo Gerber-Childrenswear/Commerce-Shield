@@ -3,7 +3,7 @@
 client_id = "dc386b789af148f54d80b54d07e63215"
 name = "Commerce Shield"
 application_url = "https://commerce-shield.onrender.com/"
-embedded = true
+embedded = false
 
 [webhooks]
 api_version = "2025-10"

@@ -2,6 +2,21 @@ name = "commerce-shield-prod"
 main = "src/index.js"
 compatibility_date = "2024-12-01"
 
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[observability.traces]
+enabled = false
+head_sampling_rate = 1
+persist = true
+
 [vars]
 SHOPIFY_APP_URL = "https://commerce-shield-prod.ncassidy.workers.dev"
 SHOPIFY_ADMIN_SHOP = "gerberchildrenswear.myshopify.com"

@@ -4,6 +4,23 @@ function toHex(bytes) {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function decodeSharedSecret(secret) {
+  const normalized = typeof secret === "string" ? secret.trim() : "";
+  if (!normalized) return encoder.encode("");
+
+  const looksBase64 = normalized.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(normalized);
+  if (!looksBase64) {
+    return encoder.encode(normalized);
+  }
+
+  try {
+    const binary = atob(normalized);
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  } catch {
+    return encoder.encode(normalized);
+  }
+}
+
 export function buildSignaturePayload(timestamp, nonce, bodyText) {
   return `${timestamp}.${nonce}.${bodyText}`;
 }
@@ -11,7 +28,7 @@ export function buildSignaturePayload(timestamp, nonce, bodyText) {
 export async function createHmacSignature(secret, timestamp, nonce, bodyText) {
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(secret),
+    decodeSharedSecret(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],

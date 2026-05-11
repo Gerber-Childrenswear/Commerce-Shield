@@ -28,10 +28,33 @@
 
   var SITE_KEY = '0x4AAAAAADI8ti4vY8C6Vy8O';
   var WORKER   = 'https://commerce-shield-prod.ncassidy.workers.dev';
+  var VERIFY_API = 'https://commerce-shield.onrender.com/api/turnstile-verify';
 
   var widgetId = null;
   var pendingSubmit = null;
   var verified = false;
+  var verifyInFlight = false;
+  var VERIFY_TTL_MS = 15 * 60 * 1000;
+  var VERIFIED_KEY = 'cs_ts_verified_until_account';
+
+  function getVerifiedUntil() {
+    try {
+      return parseInt(sessionStorage.getItem(VERIFIED_KEY) || '0', 10) || 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function markVerified() {
+    verified = true;
+    try {
+      sessionStorage.setItem(VERIFIED_KEY, String(Date.now() + VERIFY_TTL_MS));
+    } catch (_) {}
+  }
+
+  function hasRecentVerification() {
+    return getVerifiedUntil() > Date.now();
+  }
 
   function showError(msg) {
     var el = document.getElementById('cs-ts-error');
@@ -46,19 +69,35 @@
     if (el) el.style.display = 'none';
   }
 
-  function onToken(token) {
-    // Got a token from Turnstile — verify server-side before allowing submit.
-    fetch(WORKER + '/api/turnstile-verify', {
+  function verifyTurnstileToken(token) {
+    var payload = JSON.stringify({ token: token, action: 'account' });
+    return fetch(VERIFY_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: token, action: 'account' }),
+      body: payload,
       keepalive: true
     })
     .then(function(r) { return r.json(); })
+    .catch(function() {
+      return fetch(WORKER + '/api/turnstile-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true
+      }).then(function(r) { return r.json(); });
+    });
+  }
+
+  function onToken(token) {
+    if (verifyInFlight) return;
+    verifyInFlight = true;
+    // Got a token from Turnstile — verify server-side before allowing submit.
+    verifyTurnstileToken(token)
     .then(function(d) {
+      verifyInFlight = false;
       if (d.ok) {
         // Verified human — suppress pixels just in case, then allow form submit.
-        verified = true;
+        markVerified();
         hideError();
         if (pendingSubmit) {
           var f = pendingSubmit;
@@ -77,8 +116,9 @@
       }
     })
     .catch(function() {
+      verifyInFlight = false;
       // Network error — fail open so real users are never stuck.
-      verified = true;
+      markVerified();
       if (pendingSubmit) {
         var f = pendingSubmit;
         pendingSubmit = null;
@@ -89,7 +129,7 @@
 
   function onError() {
     // Turnstile challenge error (e.g. network) — fail open.
-    verified = true;
+    markVerified();
     if (pendingSubmit) {
       var f = pendingSubmit;
       pendingSubmit = null;
@@ -116,7 +156,14 @@
     var forms = document.querySelectorAll('form[action*="/account"]');
     forms.forEach(function(form) {
       form.addEventListener('submit', function(e) {
-        if (verified) return; // Already passed — let it through.
+        if (verified || hasRecentVerification()) {
+          verified = true;
+          return;
+        }
+        if (verifyInFlight) {
+          e.preventDefault();
+          return;
+        }
         e.preventDefault();
         hideError();
         pendingSubmit = form;
@@ -125,7 +172,7 @@
           window.turnstile.execute(widgetId);
         } else {
           // Turnstile didn't load — fail open so real users are never stuck.
-          verified = true;
+          markVerified();
           form.submit();
         }
       });

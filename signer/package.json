@@ -1,0 +1,16 @@
+{
+  "name": "commerce-shield-signer",
+  "version": "1.0.0",
+  "description": "HMAC signer service for Commerce Shield GTM server-side integration",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": "18"
+  }
+}

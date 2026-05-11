@@ -1,0 +1,672 @@
+﻿{
+    "exportFormatVersion":  2,
+    "exportTime":  "2026-05-11 17:45:07",
+    "containerVersion":  {
+                             "path":  "accounts/6348717123/containers/248775717/versions/0",
+                             "accountId":  "6348717123",
+                             "containerId":  "248775717",
+                             "containerVersionId":  "0",
+                             "container":  {
+                                               "path":  "accounts/6348717123/containers/248775717",
+                                               "accountId":  "6348717123",
+                                               "containerId":  "248775717",
+                                               "name":  "GCW Server",
+                                               "publicId":  "GTM-N45F3JCC",
+                                               "usageContext":  [
+                                                                    "SERVER"
+                                                                ],
+                                               "fingerprint":  "1775665464391",
+                                               "tagManagerUrl":  "https://tagmanager.google.com/#/container/accounts/6348717123/containers/248775717/workspaces?apiLink=container",
+                                               "features":  {
+                                                                "supportUserPermissions":  true,
+                                                                "supportEnvironments":  true,
+                                                                "supportWorkspaces":  true,
+                                                                "supportGtagConfigs":  false,
+                                                                "supportBuiltInVariables":  true,
+                                                                "supportClients":  true,
+                                                                "supportFolders":  true,
+                                                                "supportTags":  true,
+                                                                "supportTemplates":  true,
+                                                                "supportTriggers":  true,
+                                                                "supportVariables":  true,
+                                                                "supportVersions":  true,
+                                                                "supportZones":  true,
+                                                                "supportTransformations":  true
+                                                            },
+                                               "tagIds":  [
+                                                              "GTM-N45F3JCC"
+                                                          ],
+                                               "taggingServerUrls":  [
+                                                                         "https://server-side-tagging-he5lc7bj4a-uc.a.run.app"
+                                                                     ]
+                                           },
+                             "tag":  [
+                                         {
+                                             "accountId":  "6348717123",
+                                             "containerId":  "248775717",
+                                             "tagId":  "5",
+                                             "name":  "REDDIT-a2_it51ri6rheuz-ConversionAPI-Tag",
+                                             "type":  "cvt_M6PJS",
+                                             "parameter":  [
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "enableFirstPartyCookies",
+                                                                   "value":  "true"
+                                                               },
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "dataProcessingOptions",
+                                                                   "value":  "false"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "currency",
+                                                                   "value":  "{{Event Data - currency}}"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "eventType",
+                                                                   "value":  "Purchase"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "conversionToken",
+                                                                   "value":  "eyJhbGciOiJSUzI1NiIsImtpZCI6IlNIQTI1NjpzS3dsMnlsV0VtMjVmcXhwTU40cWY4MXE2OWFFdWFyMnpLMUdhVGxjdWNZIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyIiwiZXhwIjo0OTMzNzYxMDkyLjM3MTQzNiwiaWF0IjoxNzc4MDAxMDkyLjM3MTQzNiwianRpIjoiX216Q1VTQWF4b0I1N0FLYTd0WEtfNThhUEc1Y05RIiwiY2lkIjoiMVExRU96VFBXbll2ZXJocHR2Z1dzUSIsImxpZCI6InQyXzJid2ZxbjRqbDUiLCJhaWQiOiJ0Ml8yYndmcW40amw1IiwiYXQiOjUsImxjYSI6MTc3NTY2MzI4NDM4NSwic2NwIjoiZUp5S1ZrcE1LVTdPenl0TExTck96TThyVm9vRkJBQUFfXzlCRmdidSIsImZsbyI6MTAsImxsIjp0cnVlfQ.CZuztUHaDhLBVYY68vjhQH3BPqwGwK7bTMT7-bz0M2oPjqxBx252O96MdxkkZHJxp5Sgoj-6inOjlW8zx18XaFCIvMxZH8Gjtrj_Qg8NIlczvFJLcMxXZ4x8JZNYFqgYuTbqbMBlfx8E0hqmG-2nzJ6jomt6UzEt1M_7Jjcici3tmIGwNNwU4H24KNf5-AIvb5kWUzPO4dCBTfnVHDomf2dOEl8SoR_c2hPGtRgOfwMVkgCdQzzFZPgeOtYWVHDkdCJnHJYVurTVBntrtMnqUW03riZG2VXqSRwxyV9IzchNKLyyfPxh0wvhDwaUpOkniZinB1lr64ty7SCsMfALrA"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "id",
+                                                                   "value":  "a2_it51ri6rheuz"
+                                                               },
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "advancedMatching",
+                                                                   "value":  "false"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "transactionValue",
+                                                                   "value":  "{{Event Data - value}}"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "productInputType",
+                                                                   "value":  "entryManual"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "conversionId",
+                                                                   "value":  "{{Event Data - transaction_id}}"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "actionSource",
+                                                                   "value":  "WEBSITE"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "itemCount",
+                                                                   "value":  "{{Event Data - item_count}}"
+                                                               }
+                                                           ],
+                                             "fingerprint":  "1778004105157",
+                                             "firingTriggerId":  [
+                                                                     "17"
+                                                                 ],
+                                             "tagFiringOption":  "ONCE_PER_EVENT",
+                                             "monitoringMetadata":  {
+                                                                        "type":  "MAP"
+                                                                    },
+                                             "consentSettings":  {
+                                                                     "consentStatus":  "NOT_SET"
+                                                                 }
+                                         },
+                                         {
+                                             "accountId":  "6348717123",
+                                             "containerId":  "248775717",
+                                             "tagId":  "12",
+                                             "name":  "REDDIT-a2_it51ri6rheuz-ConversionAPI-AddToCart-Tag",
+                                             "type":  "cvt_M6PJS",
+                                             "notes":  "Added by ChatGPT 2026-05-05: Reddit server-side CAPI event. Import into GCW Server container 13.",
+                                             "parameter":  [
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "enableFirstPartyCookies",
+                                                                   "value":  "true"
+                                                               },
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "dataProcessingOptions",
+                                                                   "value":  "false"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "currency",
+                                                                   "value":  "{{Event Data - currency}}"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "eventType",
+                                                                   "value":  "AddToCart"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "conversionToken",
+                                                                   "value":  "eyJhbGciOiJSUzI1NiIsImtpZCI6IlNIQTI1NjpzS3dsMnlsV0VtMjVmcXhwTU40cWY4MXE2OWFFdWFyMnpLMUdhVGxjdWNZIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyIiwiZXhwIjo0OTMzNzYxMDkyLjM3MTQzNiwiaWF0IjoxNzc4MDAxMDkyLjM3MTQzNiwianRpIjoiX216Q1VTQWF4b0I1N0FLYTd0WEtfNThhUEc1Y05RIiwiY2lkIjoiMVExRU96VFBXbll2ZXJocHR2Z1dzUSIsImxpZCI6InQyXzJid2ZxbjRqbDUiLCJhaWQiOiJ0Ml8yYndmcW40amw1IiwiYXQiOjUsImxjYSI6MTc3NTY2MzI4NDM4NSwic2NwIjoiZUp5S1ZrcE1LVTdPenl0TExTck96TThyVm9vRkJBQUFfXzlCRmdidSIsImZsbyI6MTAsImxsIjp0cnVlfQ.CZuztUHaDhLBVYY68vjhQH3BPqwGwK7bTMT7-bz0M2oPjqxBx252O96MdxkkZHJxp5Sgoj-6inOjlW8zx18XaFCIvMxZH8Gjtrj_Qg8NIlczvFJLcMxXZ4x8JZNYFqgYuTbqbMBlfx8E0hqmG-2nzJ6jomt6UzEt1M_7Jjcici3tmIGwNNwU4H24KNf5-AIvb5kWUzPO4dCBTfnVHDomf2dOEl8SoR_c2hPGtRgOfwMVkgCdQzzFZPgeOtYWVHDkdCJnHJYVurTVBntrtMnqUW03riZG2VXqSRwxyV9IzchNKLyyfPxh0wvhDwaUpOkniZinB1lr64ty7SCsMfALrA"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "id",
+                                                                   "value":  "a2_it51ri6rheuz"
+                                                               },
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "advancedMatching",
+                                                                   "value":  "false"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "transactionValue",
+                                                                   "value":  "{{Event Data - value}}"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "productInputType",
+                                                                   "value":  "entryManual"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "actionSource",
+                                                                   "value":  "WEBSITE"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "itemCount",
+                                                                   "value":  "{{Event Data - item_count}}"
+                                                               }
+                                                           ],
+                                             "fingerprint":  "1778004105158",
+                                             "firingTriggerId":  [
+                                                                     "11"
+                                                                 ],
+                                             "tagFiringOption":  "ONCE_PER_EVENT",
+                                             "monitoringMetadata":  {
+                                                                        "type":  "MAP"
+                                                                    },
+                                             "consentSettings":  {
+                                                                     "consentStatus":  "NOT_SET"
+                                                                 }
+                                         },
+                                         {
+                                             "accountId":  "6348717123",
+                                             "containerId":  "248775717",
+                                             "tagId":  "14",
+                                             "name":  "REDDIT-a2_it51ri6rheuz-ConversionAPI-PageVisit-Tag",
+                                             "type":  "cvt_M6PJS",
+                                             "notes":  "Added by ChatGPT 2026-05-05: Reddit server-side CAPI event. Import into GCW Server container 13.",
+                                             "parameter":  [
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "enableFirstPartyCookies",
+                                                                   "value":  "true"
+                                                               },
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "dataProcessingOptions",
+                                                                   "value":  "false"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "eventType",
+                                                                   "value":  "PageVisit"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "conversionToken",
+                                                                   "value":  "eyJhbGciOiJSUzI1NiIsImtpZCI6IlNIQTI1NjpzS3dsMnlsV0VtMjVmcXhwTU40cWY4MXE2OWFFdWFyMnpLMUdhVGxjdWNZIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyIiwiZXhwIjo0OTMzNzYxMDkyLjM3MTQzNiwiaWF0IjoxNzc4MDAxMDkyLjM3MTQzNiwianRpIjoiX216Q1VTQWF4b0I1N0FLYTd0WEtfNThhUEc1Y05RIiwiY2lkIjoiMVExRU96VFBXbll2ZXJocHR2Z1dzUSIsImxpZCI6InQyXzJid2ZxbjRqbDUiLCJhaWQiOiJ0Ml8yYndmcW40amw1IiwiYXQiOjUsImxjYSI6MTc3NTY2MzI4NDM4NSwic2NwIjoiZUp5S1ZrcE1LVTdPenl0TExTck96TThyVm9vRkJBQUFfXzlCRmdidSIsImZsbyI6MTAsImxsIjp0cnVlfQ.CZuztUHaDhLBVYY68vjhQH3BPqwGwK7bTMT7-bz0M2oPjqxBx252O96MdxkkZHJxp5Sgoj-6inOjlW8zx18XaFCIvMxZH8Gjtrj_Qg8NIlczvFJLcMxXZ4x8JZNYFqgYuTbqbMBlfx8E0hqmG-2nzJ6jomt6UzEt1M_7Jjcici3tmIGwNNwU4H24KNf5-AIvb5kWUzPO4dCBTfnVHDomf2dOEl8SoR_c2hPGtRgOfwMVkgCdQzzFZPgeOtYWVHDkdCJnHJYVurTVBntrtMnqUW03riZG2VXqSRwxyV9IzchNKLyyfPxh0wvhDwaUpOkniZinB1lr64ty7SCsMfALrA"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "id",
+                                                                   "value":  "a2_it51ri6rheuz"
+                                                               },
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "advancedMatching",
+                                                                   "value":  "false"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "productInputType",
+                                                                   "value":  "entryManual"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "actionSource",
+                                                                   "value":  "WEBSITE"
+                                                               }
+                                                           ],
+                                             "fingerprint":  "1778004105156",
+                                             "firingTriggerId":  [
+                                                                     "13"
+                                                                 ],
+                                             "tagFiringOption":  "ONCE_PER_EVENT",
+                                             "monitoringMetadata":  {
+                                                                        "type":  "MAP"
+                                                                    },
+                                             "consentSettings":  {
+                                                                     "consentStatus":  "NOT_SET"
+                                                                 }
+                                         },
+                                         {
+                                             "accountId":  "6348717123",
+                                             "containerId":  "248775717",
+                                             "tagId":  "16",
+                                             "name":  "REDDIT-a2_it51ri6rheuz-ConversionAPI-ViewContent-Tag",
+                                             "type":  "cvt_M6PJS",
+                                             "notes":  "Added by ChatGPT 2026-05-05: Reddit server-side CAPI event. Import into GCW Server container 13.",
+                                             "parameter":  [
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "enableFirstPartyCookies",
+                                                                   "value":  "true"
+                                                               },
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "dataProcessingOptions",
+                                                                   "value":  "false"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "eventType",
+                                                                   "value":  "ViewContent"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "conversionToken",
+                                                                   "value":  "eyJhbGciOiJSUzI1NiIsImtpZCI6IlNIQTI1NjpzS3dsMnlsV0VtMjVmcXhwTU40cWY4MXE2OWFFdWFyMnpLMUdhVGxjdWNZIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyIiwiZXhwIjo0OTMzNzYxMDkyLjM3MTQzNiwiaWF0IjoxNzc4MDAxMDkyLjM3MTQzNiwianRpIjoiX216Q1VTQWF4b0I1N0FLYTd0WEtfNThhUEc1Y05RIiwiY2lkIjoiMVExRU96VFBXbll2ZXJocHR2Z1dzUSIsImxpZCI6InQyXzJid2ZxbjRqbDUiLCJhaWQiOiJ0Ml8yYndmcW40amw1IiwiYXQiOjUsImxjYSI6MTc3NTY2MzI4NDM4NSwic2NwIjoiZUp5S1ZrcE1LVTdPenl0TExTck96TThyVm9vRkJBQUFfXzlCRmdidSIsImZsbyI6MTAsImxsIjp0cnVlfQ.CZuztUHaDhLBVYY68vjhQH3BPqwGwK7bTMT7-bz0M2oPjqxBx252O96MdxkkZHJxp5Sgoj-6inOjlW8zx18XaFCIvMxZH8Gjtrj_Qg8NIlczvFJLcMxXZ4x8JZNYFqgYuTbqbMBlfx8E0hqmG-2nzJ6jomt6UzEt1M_7Jjcici3tmIGwNNwU4H24KNf5-AIvb5kWUzPO4dCBTfnVHDomf2dOEl8SoR_c2hPGtRgOfwMVkgCdQzzFZPgeOtYWVHDkdCJnHJYVurTVBntrtMnqUW03riZG2VXqSRwxyV9IzchNKLyyfPxh0wvhDwaUpOkniZinB1lr64ty7SCsMfALrA"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "id",
+                                                                   "value":  "a2_it51ri6rheuz"
+                                                               },
+                                                               {
+                                                                   "type":  "BOOLEAN",
+                                                                   "key":  "advancedMatching",
+                                                                   "value":  "false"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "productInputType",
+                                                                   "value":  "entryManual"
+                                                               },
+                                                               {
+                                                                   "type":  "TEMPLATE",
+                                                                   "key":  "actionSource",
+                                                                   "value":  "WEBSITE"
+                                                               }
+                                                           ],
+                                             "fingerprint":  "1778004105158",
+                                             "firingTriggerId":  [
+                                                                     "15"
+                                                                 ],
+                                             "tagFiringOption":  "ONCE_PER_EVENT",
+                                             "monitoringMetadata":  {
+                                                                        "type":  "MAP"
+                                                                    },
+                                             "consentSettings":  {
+                                                                     "consentStatus":  "NOT_SET"
+                                                                 }
+                                         }
+                                     ],
+                             "trigger":  [
+                                             {
+                                                 "accountId":  "6348717123",
+                                                 "containerId":  "248775717",
+                                                 "triggerId":  "3",
+                                                 "name":  "REDDIT-a2_it51ri6rheuz-ConversionAPI-Trigger-Custom_Event",
+                                                 "type":  "ALWAYS",
+                                                 "filter":  [
+                                                                {
+                                                                    "type":  "MATCH_REGEX",
+                                                                    "parameter":  [
+                                                                                      {
+                                                                                          "type":  "TEMPLATE",
+                                                                                          "key":  "arg0",
+                                                                                          "value":  "{{Event Name}}"
+                                                                                      },
+                                                                                      {
+                                                                                          "type":  "TEMPLATE",
+                                                                                          "key":  "arg1",
+                                                                                          "value":  "^purchase$"
+                                                                                      }
+                                                                                  ]
+                                                                }
+                                                            ],
+                                                 "fingerprint":  "1775680389481"
+                                             },
+                                             {
+                                                 "accountId":  "6348717123",
+                                                 "containerId":  "248775717",
+                                                 "triggerId":  "11",
+                                                 "name":  "REDDIT-a2_it51ri6rheuz-ConversionAPI-Trigger-AddToCart",
+                                                 "type":  "ALWAYS",
+                                                 "filter":  [
+                                                                {
+                                                                    "type":  "MATCH_REGEX",
+                                                                    "parameter":  [
+                                                                                      {
+                                                                                          "type":  "TEMPLATE",
+                                                                                          "key":  "arg0",
+                                                                                          "value":  "{{Event Name}}"
+                                                                                      },
+                                                                                      {
+                                                                                          "type":  "TEMPLATE",
+                                                                                          "key":  "arg1",
+                                                                                          "value":  "^(add_to_cart|AddToCart|dl_add_to_cart)$"
+                                                                                      }
+                                                                                  ]
+                                                                }
+                                                            ],
+                                                 "fingerprint":  "1777999893986",
+                                                 "notes":  "Added by ChatGPT 2026-05-05 for Reddit server-side CAPI import. Matches GA4/Reddit/browser-style event names forwarded into the server container."
+                                             },
+                                             {
+                                                 "accountId":  "6348717123",
+                                                 "containerId":  "248775717",
+                                                 "triggerId":  "13",
+                                                 "name":  "REDDIT-a2_it51ri6rheuz-ConversionAPI-Trigger-PageVisit",
+                                                 "type":  "ALWAYS",
+                                                 "filter":  [
+                                                                {
+                                                                    "type":  "MATCH_REGEX",
+                                                                    "parameter":  [
+                                                                                      {
+                                                                                          "type":  "TEMPLATE",
+                                                                                          "key":  "arg0",
+                                                                                          "value":  "{{Event Name}}"
+                                                                                      },
+                                                                                      {
+                                                                                          "type":  "TEMPLATE",
+                                                                                          "key":  "arg1",
+                                                                                          "value":  "^(page_view|PageVisit|dl_page_view)$"
+                                                                                      }
+                                                                                  ]
+                                                                }
+                                                            ],
+                                                 "fingerprint":  "1777999893986",
+                                                 "notes":  "Added by ChatGPT 2026-05-05 for Reddit server-side CAPI import. Matches GA4/Reddit/browser-style event names forwarded into the server container."
+                                             },
+                                             {
+                                                 "accountId":  "6348717123",
+                                                 "containerId":  "248775717",
+                                                 "triggerId":  "15",
+                                                 "name":  "REDDIT-a2_it51ri6rheuz-ConversionAPI-Trigger-ViewContent",
+                                                 "type":  "ALWAYS",
+                                                 "filter":  [
+                                                                {
+                                                                    "type":  "MATCH_REGEX",
+                                                                    "parameter":  [
+                                                                                      {
+                                                                                          "type":  "TEMPLATE",
+                                                                                          "key":  "arg0",
+                                                                                          "value":  "{{Event Name}}"
+                                                                                      },
+                                                                                      {
+                                                                                          "type":  "TEMPLATE",
+                                                                                          "key":  "arg1",
+                                                                                          "value":  "^(view_item|ViewContent|dl_view_item)$"
+                                                                                      }
+                                                                                  ]
+                                                                }
+                                                            ],
+                                                 "fingerprint":  "1777999893986",
+                                                 "notes":  "Added by ChatGPT 2026-05-05 for Reddit server-side CAPI import. Matches GA4/Reddit/browser-style event names forwarded into the server container."
+                                             },
+                                             {
+                                                 "accountId":  "6348717123",
+                                                 "containerId":  "248775717",
+                                                 "triggerId":  "17",
+                                                 "name":  "REDDIT-a2_it51ri6rheuz-ConversionAPI-Trigger-Purchase",
+                                                 "type":  "ALWAYS",
+                                                 "filter":  [
+                                                                {
+                                                                    "type":  "MATCH_REGEX",
+                                                                    "parameter":  [
+                                                                                      {
+                                                                                          "type":  "TEMPLATE",
+                                                                                          "key":  "arg0",
+                                                                                          "value":  "{{Event Name}}"
+                                                                                      },
+                                                                                      {
+                                                                                          "type":  "TEMPLATE",
+                                                                                          "key":  "arg1",
+                                                                                          "value":  "^(purchase|dl_purchase)$"
+                                                                                      }
+                                                                                  ]
+                                                                }
+                                                            ],
+                                                 "fingerprint":  "1777999893986",
+                                                 "notes":  "Updated by ChatGPT 2026-05-05: match both GA4 purchase and Elevar dl_purchase server event names."
+                                             },
+                                             {
+                                                 "accountId":  "6348717123",
+                                                 "containerId":  "248775717",
+                                                 "triggerId":  "100",
+                                                 "name":  "CS - Edge Bot Forwarder - Always",
+                                                 "type":  "ALWAYS",
+                                                 "fingerprint":  "1778521727053"
+                                             }
+                                         ],
+                             "variable":  [
+                                              {
+                                                  "accountId":  "6348717123",
+                                                  "containerId":  "248775717",
+                                                  "variableId":  "7",
+                                                  "name":  "Event Data - transaction_id",
+                                                  "type":  "ed",
+                                                  "parameter":  [
+                                                                    {
+                                                                        "type":  "BOOLEAN",
+                                                                        "key":  "setDefaultValue",
+                                                                        "value":  "false"
+                                                                    },
+                                                                    {
+                                                                        "type":  "TEMPLATE",
+                                                                        "key":  "keyPath",
+                                                                        "value":  "transaction_id"
+                                                                    }
+                                                                ],
+                                                  "fingerprint":  "1775681015568",
+                                                  "formatValue":  {
+
+                                                                  }
+                                              },
+                                              {
+                                                  "accountId":  "6348717123",
+                                                  "containerId":  "248775717",
+                                                  "variableId":  "8",
+                                                  "name":  "Event Data - value",
+                                                  "type":  "ed",
+                                                  "parameter":  [
+                                                                    {
+                                                                        "type":  "BOOLEAN",
+                                                                        "key":  "setDefaultValue",
+                                                                        "value":  "false"
+                                                                    },
+                                                                    {
+                                                                        "type":  "TEMPLATE",
+                                                                        "key":  "keyPath",
+                                                                        "value":  "value"
+                                                                    }
+                                                                ],
+                                                  "fingerprint":  "1776126389935",
+                                                  "formatValue":  {
+
+                                                                  }
+                                              },
+                                              {
+                                                  "accountId":  "6348717123",
+                                                  "containerId":  "248775717",
+                                                  "variableId":  "9",
+                                                  "name":  "Event Data - currency",
+                                                  "type":  "ed",
+                                                  "parameter":  [
+                                                                    {
+                                                                        "type":  "BOOLEAN",
+                                                                        "key":  "setDefaultValue",
+                                                                        "value":  "false"
+                                                                    },
+                                                                    {
+                                                                        "type":  "TEMPLATE",
+                                                                        "key":  "keyPath",
+                                                                        "value":  "currency"
+                                                                    }
+                                                                ],
+                                                  "fingerprint":  "1776126444088",
+                                                  "formatValue":  {
+
+                                                                  }
+                                              },
+                                              {
+                                                  "accountId":  "6348717123",
+                                                  "containerId":  "248775717",
+                                                  "variableId":  "10",
+                                                  "name":  "Event Data - item_count",
+                                                  "type":  "ed",
+                                                  "parameter":  [
+                                                                    {
+                                                                        "type":  "BOOLEAN",
+                                                                        "key":  "setDefaultValue",
+                                                                        "value":  "false"
+                                                                    },
+                                                                    {
+                                                                        "type":  "TEMPLATE",
+                                                                        "key":  "keyPath",
+                                                                        "value":  "item_count"
+                                                                    }
+                                                                ],
+                                                  "fingerprint":  "1776126469168",
+                                                  "formatValue":  {
+
+                                                                  }
+                                              },
+                                              {
+                                                  "accountId":  "6348717123",
+                                                  "containerId":  "248775717",
+                                                  "variableId":  "100",
+                                                  "name":  "CS - Worker Endpoint",
+                                                  "type":  "c",
+                                                  "parameter":  [
+                                                                    {
+                                                                        "type":  "TEMPLATE",
+                                                                        "key":  "value",
+                                                                        "value":  "https://commerce-shield-prod.ncassidy.workers.dev/api/integrations/edge-bot-event"
+                                                                    }
+                                                                ],
+                                                  "fingerprint":  "1778521727051"
+                                              },
+                                              {
+                                                  "accountId":  "6348717123",
+                                                  "containerId":  "248775717",
+                                                  "variableId":  "101",
+                                                  "name":  "CS - Shop Domain",
+                                                  "type":  "c",
+                                                  "parameter":  [
+                                                                    {
+                                                                        "type":  "TEMPLATE",
+                                                                        "key":  "value",
+                                                                        "value":  "gerberchildrenswear.myshopify.com"
+                                                                    }
+                                                                ],
+                                                  "fingerprint":  "1778521727053"
+                                              },
+                                              {
+                                                  "accountId":  "6348717123",
+                                                  "containerId":  "248775717",
+                                                  "variableId":  "102",
+                                                  "name":  "CS - Source",
+                                                  "type":  "c",
+                                                  "parameter":  [
+                                                                    {
+                                                                        "type":  "TEMPLATE",
+                                                                        "key":  "value",
+                                                                        "value":  "gtm-server"
+                                                                    }
+                                                                ],
+                                                  "fingerprint":  "1778521727053"
+                                              }
+                                          ],
+                             "builtInVariable":  [
+                                                     {
+                                                         "accountId":  "6348717123",
+                                                         "containerId":  "248775717",
+                                                         "type":  "EVENT_NAME",
+                                                         "name":  "Event Name"
+                                                     }
+                                                 ],
+                             "fingerprint":  "1778521507301",
+                             "tagManagerUrl":  "https://tagmanager.google.com/#/versions/accounts/6348717123/containers/248775717/versions/0?apiLink=version",
+                             "customTemplate":  [
+                                                    {
+                                                        "accountId":  "6348717123",
+                                                        "containerId":  "248775717",
+                                                        "templateId":  "4",
+                                                        "name":  "Reddit Conversions API",
+                                                        "fingerprint":  "1775665589560",
+                                                        "templateData":  "___TERMS_OF_SERVICE___\n\nBy creating or modifying this file you agree to Google Tag Manager\u0027s Community\nTemplate Gallery Developer Terms of Service available at\nhttps://developers.google.com/tag-manager/gallery-tos (or such other URL as\nGoogle may provide), as modified from time to time.\n\n\n___INFO___\n\n{\n  \"displayName\": \"Reddit Conversions API\",\n  \"description\": \"By using the Reddit Conversions API you agree to comply with and to be bound by the Reddit Advertiser Measurement Program Terms\\n\\nhttps://www.reddithelp.com/en/categories/advertising/policy-guideline\",\n  \"id\": \"cvt_M6PJS\",\n  \"type\": \"TAG\",\n  \"version\": 1,\n  \"brand\": {\n    \"thumbnail\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAIAAAAiOjnJAAAYwklEQVR42u1dB3xUVda/ExCQFVlQWPdb97Pr7iqropSQOpmZUBKaUhYpgiJKEaSKIkVFRVQ+xQVBAixl0UUsGIqgrKtYWEVR6UgLJJBMef3N6/d9701CMhNCycybyrm//4/fMJl57757/nPOueeeey7SXQgAsBwwBAAgFgCIBQBiAQBALAAQCwDEAgCAWAAgFgCIBQAAsQBALAAQCwAAYgGAWAAgFgAAxAIAsQBALAAAiAUAYgGAWAAAEAsAxAIAsQAAIBYAiAUAYgEAQCwAEAsAxAIAgFgAIBYAiAWoG9hlC7wI/jd6CFw/D+k5AeQGXudX/ykAJxArleBEOA9phqQdZwiXX/Mnqyil2RGdhU6P6kC98jCxcBw5d2j5iDupTuatQWOlptLyjU5nt6/jv9/kWTaNHN2Rf+AmpU9rpaCJag9I3RkRvbADqQW/oYbfRX2+RtNrN+MdcuMSelgbtetl1bQGYiU/q+yImdoF6zhY2KrM+w/uZD5dxS+dzs3uzz96F9e1sb8d0rORbj/LtJ1XURms4gbewG75R9DlMca16WW8QX+4gO//B2wHYqUEZFcat6lIP3dTRV4hypWTh+S9X1Irp3sn5FA5yH9vgGR5wQyrm2TEgOvkiqOV1NF1rJ+3SUd3Mf3/AMRKBSj3X+X/5Uu9nk2q+JX8cH75U92I/KZifiPcpaFhT/HZrHI1liUqVDGdp5l2Uijdx7oahTh5QKxkhDj4JokouyCTgqxXbXL4yw8z21aT8x+nJ7rER9qIfVpJdqRmIj4HCfu+ugg+1SYe+Z93pCzQWEkOZsS9OJRBdYj6ovRNQJP5yoT9/xW/WOdf/Sz1/ut6uI2Y3ssMRgCxkjfK4J73WC2hHp5SSL3zsv/Yrrr1yQUVTpVZU7GBeqmroKtI+3ZwOUCsJCaWjd62OlioAlUuOC8ztIXYEZGdkHt0B6roSXH3NrX8uEp7NJG/ECVw6IuwGtYV4rR/9L2JECwFloQDfzYSydJgmTLffIS7NKr5TJ45+xPuRWweYoffwb3Qn1/5PPfZP4X9O2TOp0etaZrCz3lQywNiJSd8XZrVkii59GncuUHdn3eYwVIlG8ldGyl9f+d/8DZqdCf34onMtx+rClN/u3kBk8otnKQCsZISduQ2fOTQRk8txPVcMcROxGQgX+/WnjmDyX+v1gTCUDg61iLjlu5fPlMDU5h8yEc4E5HFC4KVhMR4/aPuDWcpOj+wyJiLcAZi7ka++1v7tq6K0BryS6ZpDiBWEoJriyTv8RDP/cguacC14a8O5dcYTfrVEXpktpCbNxJ8rKQMNPi6NNU1NVic4jcbJFda5IkMhnHkn+yiaXLYxFI50v+kUweNlYwOFj3FoWM1OFIgrn9TzrTm+tKg66WS/bgq7lBvZ0su2efv1QLiWMkHLRuxK6cHxdkxViR2ziDdbo06lLMQX7zIcOFxWB48u3aOkg4B0iRMwBI7IWnHxpDQkcCRD//ZCutjq3SziJ5XGfOBMFgls24mr0GCpJICXeone657M/HQDyH+MkcxnSy2tqcmOuoV16r8TMUDtyZOgjJwpV4aC4kj/iq7T4TEjX7ZJrW3+l7ZyDt/jFY1Rbiws4UV0Tujd4BVtugn4AOxLCeWA/HTCjVFCIm5L5li5u5ZfS/VgcjZDyi898KZEd4SelqhmmDZyUCX+njuTsS+PrqWXCseuVPPi5ZLx9z3O+LjBedOx9F8K5/lel6FnQk3VkCX+hCrayNqY+10ZKJDdMNmBmt9+U2I+SOp/xbrvhLMEdh9mNq+lnx5COFonCDZV0CsyMxTj2bcwe9CkhoO7FCyoryvsFIb5SCloxn0Z+8y/1XTUcJSCohVb1CFLTVdCzZK5JoXdTuMDBArwsWcxzrU8nN8Ex2BzYM2GB8gVvjhJd+yabX39PX5I4wMECsyBysL0T9vC0lQObZbvv9qGBkgVkRpWHQ7VCtMSX/+jlrYFAYHiBUB8lDFkFtrBRq4omdUBwwOECuyNRbq76OD54NYlfkXBiZyvRcgVhJA7oD4HeuD1ZVClgtj2ulOGBwgViTpyB2R5gnZUC+fOMAmRkodECtp4UDUoBs1lggh1u6v/B1hcIBYkXnu3KzemugPzdV8WcuEwQFiRQAlE/lXP1crKYqa3h0Wc4BYkXnuTiR8+s/aSQ3dm+sQawBiRUSsPq38e74OmRL6vczd1XWLAUCssPLcxWF/Fn0hU0Jy6z/0TJQgScBArKTMaDBAj8moldTgea6vngPjA8QK1UB6dfl/p5nGrhlw2bSujbXuVyg9rvT3bMn0aEV0v4YacAP9aDvPREf5qhdrOVjHZw4gR7anBt7s63EN3aOVv1dLpWdzrftvtG6NNFeacUHjssGxU5xvA2Klugaym7M8IRPxfVqLI9uyTxdwc4fTy6Yzm5eyO7cIx37hqQpd185dG+3sqpC6n/H4j+9hf9jKfrKMXj6TnfsIO61AGnkP37e1kGXeTg86YQCIlVIRTj0bsW0R2bMF/Xxf/qP58k9fSEd3K94yRfLrF1Wiqn4bk43LKr5T4rE9xo349fONmxI9W3JtA7W4HUCsJERIkaqAMRJykHvIbcQ7L6nECVPZRFyAKpwaMMZNMVZ9Jb535ngG3erPDUpmDzLQQKyENnY4F8nONPlv15Jjs6kP3hDocj3+DYcWLD1NfvA6MTbb6KTsNA+5SL3F7NSiVCZiujbhX+jPFi8RT+6vS6445urqfCQTT+zjit/mZvdjujQyOp9K9Er2+V1VVSo1A3kKrqTWvaIRpVpdblMiN03kNV8pvXaOp2vTM+uPaTjxTopLeWLZalSUE2ldGhF9r6O3FFlRHDaOOqyq2+SmxWS//9W6XIbD8cBsieOrxXWmlou0LCRnICkdyZ3M1/WYltuR6GrAjcsiNxXh84QGkoJUZ71BFS9ix2aITtvFbt6PcDBThFh25G+HyD7XcC/0p1bOlDa9LX+2Uty0mF41y3iH7Pt7vn31Nl9b8EQPn1FUckdEjLpX+PZjTeL0FG2qwPi//pAYcecFCqkZg9kBkfe3Ymf3o1fOEDcuNgbTGFJq9bPciwPIfn8wzxuzpzaxAssjfDbyPddXOrFHV2SsSFhTzbKL5mxcM4/6UGTjfankZ+/s/nxGyCaZ6p8m4bqM/c+aM5WrU7oFhoX5dDlZWU7NWTtIYQyRZ1Zv8egPemDczLJHlSMZGMzAm5J06oDvhQFcdvWuWltqEcuBlG5NfBPyhPIjF2kVRO8xYpJL7tq4suwTdiC54DfEjN6Kn9EvlVZl02WeIqb1kAsuD5g206lXujQix+eKpw+dYwRr21fBU+Kb4lIKL4+ZcYxJ0DIH8QP+yGxaetHuRs3BpfTm5dyAa8V2iBvTnvnPe8nrn0fugDHb3mVH3i0bQ9HvGmZDURiXobeu4gbfiHOSn1jYlWb8vNhBN4lHfgp7cIVfdzHFC1WyXL/km+IrYz6YJxz4PuwrSCf2sUP/lAIay8YUNhfOaGwc6Y8WmgWG1awA2L1FchPL72zA/vK5hScQ4UudGZF/P3CQ08EdfP5lSUosm9gRsR+/CVonMRu3pUhITzZimVFjB2LHpquMD0SYmJpP5Sh2Ul70JolR3NnCbSoCdZXIRpXbslLOT0syYokPXC95T4IEE7nJVIUw6OYkIxbxZAFILvGbb2bfKMXio7V6Q61fAGJL/MZsWRal5JyoXFR1IO7X70Fsid/4k3sle/IQi81GikSD2BK/abpKZyULsfIRlYFAZknjZnWKSq2AqBCLjCuxNMmv+U4QK2Z6Hm1L5KX52iEyB7mH/YVaNF4q+QXHI3HZuKlUsptaNKF82O1kNjK7lJfmGXE3sWKG0VVNEuI4XETSEMswhVlxM4Xi3u3Ms/cxHZGehWrSLwMn0ujZZmE+ZrKD+3p9TGPcX3/MTHby6YFNhXkhZbeMThpdZWbdJ+z5Kk7xrCQyhS6k5MXceQ/sTvaunu0vbBaym+qsKY+5Oazgcu/cYTgWYtN9cx82bheUqVJ726PZJTsSCpp5Vz1X/SCxc95Lk8p5N2srfhTrcEPZm2PxxY6RTXPZfC88gM9spccWixObTce+FwdrndPwxQWKNDs6Nf/xGA8anVzhBjNAOrUwpgO0ealajwEyd7NI2Ygv/ntAQ+BoKCtuw0Ixp35bBdU8RG0qiuW4+Wb1SzJiCTFa0glk7pYf4wZej+u3TcoUOdO5iewpicpqifcE3blJPWVm5hxzA66TTx+tfrQoL+mU+wfdlHSL0DZ+05IYsErHGr/2FTU7rG0COcgzq080euZ5rk9YBbRsiqFH//WyXnMadDRnFVtXSkm2CJ0fSJsZl66yPj04g916WulYlogHbwkz/SMf0R2Qoli8h0xROapD+O4pMeQWLIvRVlcqR7KT7IFZavKsFVa6q1JNol809bn3JHdPRKW2yeJF1naJ3LDY4AcOV2DG48jR9CIqZypJmehXPZ32uxqwP30eVWKx21ZqGRF10vPSYIvt4JwhkXjExuMwn62IVkgmoOj5gzu4/EZRrQ0R9c0UXOFv/aX7g30ii9XDqufNwGPYe2jzETUu29ouMeNy6wyhXSyyELlqVjSCIFUxZO9xpkfLpN+lY27/GnijeGRXlHxRcuX08IkVADOmk8Wxj8czIxq0bET8Y0aUvFKpZC8z9LbKPcCpsGGV+9u1zMais389kTdqwyI9MyJT6LV6Yuid1TciK5OJqA1vRWNWSG9dyQ+8IRU2rIZsse/amBifK5w6aPEUrGwf3zaijhHvzrF4Wffdl6v2wofVJeNx5LJ91lpAseKob5JLKUitLfbBZtFbcKVYdsTCITNm5mSPFmGPl5iF+LIDFi/AlR0Qc8LXoMbj4EC+g0X6Ckulh71dLo9xGbdYV3MUHv6z6j1laZaMwr09UcsOM9ZQ8VCbaHgz5cPv1MM6fNV4EG7xeF1VLDOFWFc9pfzgm1KaWA4kPJGh0l6L9fzhH/33XVWPGj1nhphNR+LRXdHwZsSjP7Pp4ZRDFnq3FH/daW1/VMrNx/ww2FgTS3yqs8aRFhXdq7mCb8EEnJ+G65Xbk4GYJZOxolhNrMClVJVdOkWp36zCZjyC980nLJ/faCwhTLbHuLpfzDXWM4VaVYEryyoRVDb32EztYq2PTXMgdnyOQrmjEwMxr6nQXnaCXbtocRqdrxibYTmrzMVUjhKf6nIpECsqyaWajqmXh4j2CxXedCIxHbHTe0ruE9FebjJuwUzvadyuLjNkq3lhKPJcRL00WNOjUaPQIBYpTs1PcWIZTxgwhdFZkjYc+X+v8Xa70sxLdgTWwp0hLg7ORESXpv4tS1SBjU3Ck3Ej/5YiosvlOLOupXqnGQ71dGvGbVuja3IUBiVQpoEhhIm5KU0sJ/KP7ahSnugYoJqfu+/D+e5Bt3C5SHWlGY6L8S9vt3l6tPKteV4TmZgkO4USXmR8a2Z7ul/tt9uqupSfxuaiioE3+T58I6rdwcaskKzgR92T4uEGfthtircsNoIVRYbf/y2/cwu3d7vEuvUEaBLj5vZsZ3du9u/7WhComPAaK+6T3MDrU5xYXOEVStnh2OkKaAaxSn9l8xumeJ13vj1Sj/0c45FNYJLhGFxfO/Sdv32qHyCgZSB6w0LQKLGirTnI5hFDmalOLN2OyOk9QOSxbMQUR+wPp4jDYRhEDgKNFcvmy4iDlONwS8Wwht9vBHnHppHb34u9HYwLscwTrSomu0DksWmecZlxOQMsPmeOCc6GIlkKUo96JK/iqOBqGBcRx4dYOD/N99ZkEHy0Aw3E/HG4akuq7ZIglnloxfA2EnEa5B9FdeU5IQy/vdZqacprLCTnIX7zssCZgzA9jIrG4je8Ldvjpjjid3RvHiIG3xzIwY3lgjCOq23CseoP1jWZ+Nv/XmJH91brrWzke/elqMa0xPIjxPvzuJ8+qxlyHGcFye/+nFg3TyzbH9W7eJc/o+fEU7jxvLfhUdIdkeQ5Gq0Qzgdv0BlmSRmpHSKe7xNI14lXYLYyL8pLzhkktjO7xHVCxDtzovVzOrWf6xBfycaZWIHdTo/eo1pfcBZLpw5X5ooY/pyej9ROiB3Xid/9VVwoZSqq/TvYiTnmyeH5VdW5+P7/I508YPn9FIElH2oTZ7HGn1gupDpt7IrpVksTCwd3sgVNQyyvAwm9WnoXTT7XwcmWsqnGfzIrkRY9JfS+GjtCcx7zG0r7dljOYrZoqhqnmWBiEcvchuVqIB74xtodBHL5cb8x2a5r0uDpegW5ZWnAw41SfbPKtFHV4De5bYWnsLluR/isyrbcgzdL1qamYSzt/YLLSwiZxr0Htqp97ve1lsqPWStedstyvlvwDmBbVTEMZyD5vUcLbtlTws7P5IoSzVJOye4S4cdt3IpniF5Xm+t0tStwmB3wd27EbFxsLZXFskNE9xZxnAkmnMYykYvooX8RqdPWag3hh0+Ini0C8yPb2e6dmon8rjRx+O3stB7ksunsjmLxvBXPzqPZRF8p+91GYvlM7ple4iN3+PMbqJnnqGSUi4iCZsJ/i60Oh5ZQg24OpMfYgFjBIVMbdtmY0R0UP2WtTVJ9p71jM4OKlNrq2CnqQlrnBrhbE7GwGdWtuWdUuvvVR6i1c7kv15J7vqBL98pkqca7Nd5jvKBL95F7vuS+fI9a+4rntRGeMRlkt98KBc1wQRMtvwF2nlsxu2xaNvKMahfI+rfSBsusj3msHY6kKFfKaqxKRz4bsc/10XjKSq1VGddZMUO4/3dmyW5n7brctWRfaZrNn34uwllmko/YEXHtEdsOMe3MF2K6+aZZLSI38DFH3RyqpR01JxL7tPYWPVXj0lvEK5Uj6Bk9teqolRM0Vp1lg9MRO7O3zHqtdqjNYCm9aAo39FYxI0CIM64PjkIMJThj1rgdN+RmeuFE/6lDlj+URJ5mphUo6Ykmx0QjVkAkWi5iRrQV3cf0KDTFUyp8/b5vUh7dAdXsa7W8aHTlOTntkW9CjrD9X7I7KsVqhbJDzMN3GsOVaKxKQI11xuVyIvKBG8STBy08W+ZMbKnqggpLkOte8zz4FybbTOMx45aVCMf5tVV/3bgUk21zD76F/NdchfHqUWpYE0v2Uf3/qFcad2cCeVcJTayqbRcFV0i7PtEudmYWrg5TGGb7+763JtLjcvgRd0tDblT6thYLmsoOJGeZULKR4cFUw3AElcD7xgfEbk2VPq2kwTcaX6TH5vgWjKe/XKeI0Tv5rMo1E78vJjs30fMSV3yJqrHOnEriz0PMwnGKwOkxaYrIiGWHxH3fsN8WC1tXCx8tFt97TVj1LFs0lV48kV48gS16Ulj5rPmm8aetq9hvisW934ilhxSBjiL3gyeAPE2/OYa3n11cBIhVr9ipMUV3ImLYHQpREk154XNRIqAiNKwpWgDYjKdrFx/fsraHsvsw+eCfNEciSy0JiBXi1BPpiNm0GCtyrAUa73y9Km4rMr3+DbJDwvlSSU6syn1jmYgan83v3HKpJYPy322mxnZSs85kRgCxLLeMOBdJPa/0PV3oLzt4KVCKO7HPN7VA7n6FZk9ojyq5NVbIBrLOjb0LntBCErlSyjJqIu95Y6TYuVGSCihJiVWVoeDrdgX7wTy5/DhOflbhqlAClk8fZ9a9SuY3rjxxAwOxYhiMqHHqDceL7fd75vVR3K5/J73h+3EbM+8xts81pjvlTPSAQmqawtpLvA6k9mpOPHQH+ekKfEHVEKec91oTveD/E5uLiKG3a72am6EEZyoIJSWIFbTuq2Ujr6Mh9dYT0ulDWBJwTcwJJ4rFq1qSUY3uyWX7qQWPe+w2nJMqgkg1YtXKKchBbEfEPPpX/+pZwo7N4ukjiUMr8dRh4duN/IoZ9PA2XEekpxylUo5YdVX/NpwVMb+hOOw2dpKTWDqN/XGrguUITFi4K0WayO78hFzyFDvRKQ69VXSlmYmHjlQe/JQmVkiOaBru3EDr2ohxNHIPa0O8NZ7esV6RuYidMHyubykyQ3/7IbFgrGfo7cZNta5NjA4Y3bg0BvwSIZYzNLfTaSZ/mtVQ70Z05ybux9PZ/xtOvv+q+F2xeuwX9cRB+dRRxX1S9Z1WKbfK+DSO1Hj6DCjjv8ab5p98p42PGR9WTxwwvijs+Jh67xXutYfcYzrQrsb0XcjcSZEbZKOdtqSe6AGx6lzMrkuilWdD2E1HB2cgsQPi25n5FFSvFuzA64VH7uAfby9MzBGnOsVpXYVnCgyIT3cVn3QKE3LMPw2/nRt4HdXzt367+UXj6+bxEznV6amhmRqXGNAl+MwXpeGq4TgHEjXDDogFAGIBAEAsABALAMQCAIBYACAWAIgFAACxAEAsABALAABiAYBYACAWAADEAgCxAEAsAACIBQBiAYBYAAAQCwDEAgCxAAAgFgCIBQBiAQBALAAQCwDEAgCAWAAgFgCIBQAAsQBALAAQCwAAYgFigP8HI6uDPSR8++MAAAAASUVORK5CYII\\u003d\",\n    \"displayName\": \"reddit\",\n    \"id\": \"github.com_reddit\"\n  },\n  \"containerContexts\": [\n    \"SERVER\"\n  ]\n}\n\n\n___TEMPLATE_PARAMETERS___\n\n[\n  {\n    \"help\": \"You can find your Pixel ID at \\u003ca href\\u003d\\\"https://ads.reddit.com/events-manager#pixel-onboarding/gtm\\\"\\u003ehttps://ads.reddit.com/events-manager#pixel-onboarding/gtm\\u003c/a\\u003e\",\n    \"valueValidators\": [\n      {\n        \"type\": \"NON_EMPTY\"\n      },\n      {\n        \"args\": [\n          3,\n          100\n        ],\n        \"type\": \"STRING_LENGTH\"\n      },\n      {\n        \"args\": [\n          \"(t2_|a2_)[a-z0-9]+\"\n        ],\n        \"type\": \"REGEX\"\n      }\n    ],\n    \"displayName\": \"Pixel ID\",\n    \"simpleValueType\": true,\n    \"name\": \"id\",\n    \"type\": \"TEXT\",\n    \"valueHint\": \"t2_***** or a2_*****\",\n    \"notSetText\": \"Please provide your Reddit Ads Pixel ID.\"\n  },\n  {\n    \"macrosInSelect\": true,\n    \"selectItems\": [\n      {\n        \"displayValue\": \"Website\",\n        \"value\": \"WEBSITE\"\n      },\n      {\n        \"displayValue\": \"App\",\n        \"value\": \"APP\"\n      },\n      {\n        \"displayValue\": \"Physical Store\",\n        \"value\": \"PHYSICAL_STORE\"\n      },\n      {\n        \"displayValue\": \"Other\",\n        \"value\": \"OTHER\"\n      }\n    ],\n    \"displayName\": \"Source of Event\",\n    \"simpleValueType\": true,\n    \"name\": \"actionSource\",\n    \"type\": \"SELECT\"\n  },\n  {\n    \"macrosInSelect\": true,\n    \"selectItems\": [\n      {\n        \"displayValue\": \"Page Visit\",\n        \"value\": \"PageVisit\"\n      },\n      {\n        \"displayValue\": \"View Content\",\n        \"value\": \"ViewContent\"\n      },\n      {\n        \"displayValue\": \"Search\",\n        \"value\": \"Search\"\n      },\n      {\n        \"displayValue\": \"Add to Cart\",\n        \"value\": \"AddToCart\"\n      },\n      {\n        \"displayValue\": \"Add To Wishlist\",\n        \"value\": \"AddToWishlist\"\n      },\n      {\n        \"displayValue\": \"Purchase\",\n        \"value\": \"Purchase\"\n      },\n      {\n        \"displayValue\": \"Lead\",\n        \"value\": \"Lead\"\n      },\n      {\n        \"displayValue\": \"Sign Up\",\n        \"value\": \"SignUp\"\n      },\n      {\n        \"value\": \"Custom\",\n        \"displayValue\": \"Custom\"\n      }\n    ],\n    \"displayName\": \"Event to Fire\",\n    \"simpleValueType\": true,\n    \"name\": \"eventType\",\n    \"type\": \"SELECT\"\n  },\n  {\n    \"type\": \"TEXT\",\n    \"name\": \"customEventName\",\n    \"displayName\": \"CustomEventName\",\n    \"simpleValueType\": true,\n    \"enablingConditions\": [\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"Custom\",\n        \"type\": \"EQUALS\"\n      }\n    ]\n  },\n  {\n    \"type\": \"TEXT\",\n    \"name\": \"currency\",\n    \"displayName\": \"Currency\",\n    \"simpleValueType\": true,\n    \"enablingConditions\": [\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"AddToCart\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"AddToWishlist\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"Purchase\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"SignUp\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"Lead\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"Custom\",\n        \"type\": \"EQUALS\"\n      }\n    ],\n    \"help\": \"Currency should follow the ISO 4217 standard\"\n  },\n  {\n    \"type\": \"TEXT\",\n    \"name\": \"transactionValue\",\n    \"displayName\": \"Transaction Value\",\n    \"simpleValueType\": true,\n    \"enablingConditions\": [\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"AddToCart\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"AddToWishlist\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"Purchase\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"SignUp\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"Lead\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"Custom\",\n        \"type\": \"EQUALS\"\n      }\n    ],\n    \"help\": \"The value of the transaction as a decimal value of currency.  For example, a value of $10.99 USD should be entered as \\\"10.99\\\".\"\n  },\n  {\n    \"type\": \"TEXT\",\n    \"name\": \"itemCount\",\n    \"displayName\": \"Item Count\",\n    \"simpleValueType\": true,\n    \"enablingConditions\": [\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"AddToCart\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"AddToWishlist\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"Purchase\",\n        \"type\": \"EQUALS\"\n      },\n      {\n        \"paramName\": \"eventType\",\n        \"paramValue\": \"Custom\",\n        \"type\": \"EQUALS\"\n      }\n    ]\n  },\n  {\n    \"type\": \"TEXT\",\n    \"name\": \"conversionId\",\n    \"displayName\": \"Conversion ID\",\n    \"simpleValueType\": true,\n    \"help\": \"Unique Conversion ID that corresponds to a distinct conversion event. Conversion ID is used for deduplication and prevents the same conversion event from being processed more than once if it is sent multiple times.\"\n  },\n  {\n    \"type\": \"TEXT\",\n    \"name\": \"testId\",\n    \"displayName\": \"Test ID\",\n    \"simpleValueType\": true,\n    \"optional\": true,\n    \"help\": \"Enable this only for use with \\u003ca href\\u003d\\\"https://ads.reddit.com/events-manager/testing\\\"\\u003eEvent Testing\\u003c/a\\u003e. \\u003cstrong\\u003eDisable in production!\\u003c/strong\\u003e Events with this setting enabled are rate-limited to max 10 events per second.\"\n  },\n  {\n    \"type\": \"CHECKBOX\",\n    \"name\": \"enableFirstPartyCookies\",\n    \"checkboxText\": \"Enable First Party Cookies\",\n    \"simpleValueType\": true,\n    \"defaultValue\": true\n  },\n  {\n    \"type\": \"CHECKBOX\",\n    \"name\": \"advancedMatching\",\n    \"checkboxText\": \"Enable Advanced Matching\",\n    \"simpleValueType\": true\n  },\n  {\n    \"type\": \"GROUP\",\n    \"name\": \"advancedMatchingGroup\",\n    \"displayName\": \"Advanced Matching Parameters\",\n    \"groupStyle\": \"ZIPPY_OPEN\",\n    \"subParams\": [\n      {\n        \"type\": \"SIMPLE_TABLE\",\n        \"name\": \"advancedMatchingParams\",\n        \"displayName\": \"\",\n        \"simpleTableColumns\": [\n          {\n            \"defaultValue\": \"\",\n            \"displayName\": \"Parameter Name\",\n            \"name\": \"name\",\n            \"type\": \"SELECT\",\n            \"selectItems\": [\n              {\n                \"value\": \"email\",\n                \"displayValue\": \"Email\"\n              },\n              {\n                \"value\": \"phone_number\",\n                \"displayValue\": \"Phone Number\"\n              },\n              {\n                \"value\": \"aaid\",\n                \"displayValue\": \"AAID\"\n              },\n              {\n                \"value\": \"idfa\",\n                \"displayValue\": \"IDFA\"\n              },\n              {\n                \"value\": \"externalId\",\n                \"displayValue\": \"External ID\"\n              }\n            ],\n            \"isUnique\": true,\n            \"macrosInSelect\": false\n          },\n          {\n            \"defaultValue\": \"\",\n            \"displayName\": \"Parameter Value\",\n            \"name\": \"value\",\n            \"type\": \"TEXT\",\n            \"valueValidators\": [\n              {\n                \"type\": \"NON_EMPTY\"\n              }\n            ]\n          }\n        ]\n      }\n    ],\n    \"enablingConditions\": [\n      {\n        \"paramName\": \"advancedMatching\",\n        \"paramValue\": true,\n        \"type\": \"EQUALS\"\n      }\n    ]\n  },\n  {\n    \"type\": \"CHECKBOX\",\n    \"name\": \"dataProcessingOptions\",\n    \"checkboxText\": \"Enable Data Processing Options\",\n    \"simpleValueType\": true\n  },\n  {\n    \"type\": \"GROUP\",\n    \"name\": \"dataProcessingOptionsGroup\",\n    \"displayName\": \"Data Processing Parameters\",\n    \"groupStyle\": \"ZIPPY_OPEN\",\n    \"subParams\": [\n      {\n        \"type\": \"CHECKBOX\",\n        \"name\": \"limitedDataUsageOptions\",\n        \"checkboxText\": \"Enable Limited Data Usage options\",\n        \"simpleValueType\": true,\n        \"defaultValue\": true\n      },\n      {\n        \"type\": \"GROUP\",\n        \"name\": \"limitedDataUsageParams\",\n        \"displayName\": \"Limited Data Usage Parameters\",\n        \"groupStyle\": \"ZIPPY_OPEN\",\n        \"subParams\": [\n          {\n            \"type\": \"TEXT\",\n            \"name\": \"ldu_country\",\n            \"displayName\": \"Country\",\n            \"simpleValueType\": true,\n            \"help\": \"Country Code of the user. We support ISO 3166-1 alpha-2 country codes, e.g. USA.\"\n          },\n          {\n            \"type\": \"TEXT\",\n            \"name\": \"ldu_region\",\n            \"displayName\": \"Region\",\n            \"simpleValueType\": true,\n            \"help\": \"Region Code of the user. We support ISO 3166-2 region code, e.g. USA-CA or just the region code without country prefix, e.g. CA.\"\n          }\n        ],\n        \"enablingConditions\": [\n          {\n            \"paramName\": \"limitedDataUsageOptions\",\n            \"paramValue\": true,\n            \"type\": \"EQUALS\"\n          }\n        ]\n      }\n    ],\n    \"enablingConditions\": [\n      {\n        \"paramName\": \"dataProcessingOptions\",\n        \"paramValue\": true,\n        \"type\": \"EQUALS\"\n      }\n    ]\n  },\n  {\n    \"type\": \"GROUP\",\n    \"name\": \"products\",\n    \"displayName\": \"Product Information\",\n    \"subParams\": [\n      {\n        \"type\": \"RADIO\",\n        \"name\": \"productInputType\",\n        \"displayName\": \"Input Type\",\n        \"radioItems\": [\n          {\n            \"value\": \"entryManual\",\n            \"displayValue\": \"Individual Entry\",\n            \"help\": \"Configure product-level information using one row per unique product.\"\n          },\n          {\n            \"value\": \"entryJSON\",\n            \"displayValue\": \"JSON Payload\",\n            \"help\": \"Configure product-level information by submitting an array of unique products in JSON format.\"\n          }\n        ],\n        \"simpleValueType\": true\n      },\n      {\n        \"type\": \"SIMPLE_TABLE\",\n        \"name\": \"productsRows\",\n        \"displayName\": \"Individual Entry\",\n        \"simpleTableColumns\": [\n          {\n            \"defaultValue\": \"\",\n            \"displayName\": \"Product ID\",\n            \"name\": \"id\",\n            \"type\": \"TEXT\",\n            \"valueHint\": \"The item\\u0027s ID in the catalog\",\n            \"isUnique\": false\n          },\n          {\n            \"defaultValue\": \"\",\n            \"displayName\": \"Product Name\",\n            \"name\": \"name\",\n            \"type\": \"TEXT\",\n            \"valueHint\": \"\"\n          },\n          {\n            \"defaultValue\": \"\",\n            \"displayName\": \"Product Category\",\n            \"name\": \"category\",\n            \"type\": \"TEXT\",\n            \"valueHint\": \"For example, Google\\u0027s product taxonomy\",\n            \"isUnique\": false\n          }\n        ],\n        \"help\": \"The Product ID and Product Category are required, but the Product Name is optional.\",\n        \"enablingConditions\": [\n          {\n            \"paramName\": \"productInputType\",\n            \"paramValue\": \"entryManual\",\n            \"type\": \"EQUALS\"\n          }\n        ]\n      },\n      {\n        \"type\": \"TEXT\",\n        \"name\": \"productsJSON\",\n        \"displayName\": \"JSON Payload\",\n        \"simpleValueType\": true,\n        \"enablingConditions\": [\n          {\n            \"paramName\": \"productInputType\",\n            \"paramValue\": \"entryJSON\",\n            \"type\": \"EQUALS\"\n          }\n        ],\n        \"help\": \"The Product ID and Product Category are required, but the Product Name is optional. Format: [ { \\\"id\\\": \\\"Product_ID\\\", \\\"name\\\": \\\"Product_Name\\\",  \\\"category\\\": \\\"Product_Category\\\" }, ... ]\"\n      }\n    ],\n    \"groupStyle\": \"ZIPPY_CLOSED\"\n  },\n  {\n    \"type\": \"GROUP\",\n    \"name\": \"authentication\",\n    \"displayName\": \"Authentication\",\n    \"groupStyle\": \"ZIPPY_OPEN\",\n    \"subParams\": [\n      {\n        \"type\": \"TEXT\",\n        \"name\": \"conversionToken\",\n        \"displayName\": \"Conversion Access Token\",\n        \"simpleValueType\": true,\n        \"valueValidators\": [\n          {\n            \"type\": \"NON_EMPTY\"\n          }\n        ],\n        \"notSetText\": \"Please provide a Conversion Access Token.\",\n        \"help\": \"Generate this in your Reddit Ads account - \\u003ca href\\u003d\\\"https://business.reddithelp.com/helpcenter/s/article/conversion-access-token\\\"\\u003ehttps://business.reddithelp.com/helpcenter/s/article/conversion-access-token\\u003c/a\\u003e\"\n      }\n    ]\n  }\n]\n\n\n___SANDBOXED_JS_FOR_SERVER___\n\nconst JSON = require(\"JSON\");\nconst Promise = require(\"Promise\");\nconst encodeUriComponent = require(\"encodeUriComponent\");\nconst getAllEventData = require(\"getAllEventData\");\nconst getContainerVersion = require(\"getContainerVersion\");\nconst getCookieValues = require(\"getCookieValues\");\nconst setCookie = require(\"setCookie\");\nconst getTimestampMillis = require(\"getTimestampMillis\");\nconst getType = require(\"getType\");\nconst logToConsole = require(\"logToConsole\");\nconst makeInteger = require(\"makeInteger\");\nconst makeNumber = require(\"makeNumber\");\nconst makeString = require(\"makeString\");\nconst makeTableMap = require(\"makeTableMap\");\nconst parseUrl = require(\"parseUrl\");\nconst sendHttpRequest = require(\"sendHttpRequest\");\n\nconst TEMPLATE_VERSION = \"2.0.0\";\n\nconst TAG_VERSION = \"v2.1\";\n\nconst PIXEL_ID = encodeUriComponent(data.id);\n\nconst CONVERSION_TOKEN = data.conversionToken;\n\nconst containerVersion = getContainerVersion();\nconst containerId = containerVersion.containerId;\n\nconst MILLIS_IN_SECONDS = 1000;\n\nconst CONSTANTS = {\n  ACCESS_TOKEN_EXPIRY_THRESHOLD_MILLIS: 60 * MILLIS_IN_SECONDS,\n\n  API_USER_AGENT:\n    \"SGTM:\" + containerId + \":\" + TAG_VERSION + \" (by \" + PIXEL_ID + \")\",\n\n  CAPI_PARTNER: \"SGTM\",\n\n  API_CONVERSIONS_ENDPOINT: \"https://ads-api.reddit.com/api/v3/pixels/\" + PIXEL_ID + \"/conversion_events\",\n  API_CONVERSIONS_ENDPOINT_TIMEOUT: 3 * MILLIS_IN_SECONDS,\n\n  CLICK_ID_COOKIE_NAME: \"_rdt_cid\",\n  CLICK_ID_EVENT_NAME: \"rdt_cid\",\n  CLICK_ID_URL_NAME: \"rdt_cid\",\n  CLICK_ID_COOKIE_EXPIRATION_SECONDS: 90 * 24 * 60 * 60, // 90 days in seconds\n\n  EMAIL_COOKIE_NAME: \"_rdt_em\",\n\n  UUID_COOKIE_NAME: \"_rdt_uuid\",\n  UUID_EVENT_NAME: \"rdt_uuid\",\n  \n  TRACKING_TYPE_MAPPING: {\n    \"PageVisit\": \"PAGE_VISIT\",\n    \"ViewContent\": \"VIEW_CONTENT\",\n    \"Search\": \"SEARCH\",\n    \"AddToCart\": \"ADD_TO_CART\",\n    \"AddToWishlist\": \"ADD_TO_WISHLIST\",\n    \"Purchase\": \"PURCHASE\",\n    \"Lead\": \"LEAD\",\n    \"SignUp\": \"SIGN_UP\",\n    \"Custom\": \"CUSTOM\"\n  }\n};\n\nconst DEFAULT_EVENT_TIME = getTimestampMillis();\n\nconst TEST_ID = data.testId;\n\nfunction collectEventData() {\n  return Promise.create((resolve) =\u003e {\n    const eventData = getAllEventData();\n    const config = data;\n\n    const integrationPartner =\n      eventData.integration_partner || CONSTANTS.CAPI_PARTNER;\n\n    if (TEST_ID) {\n      logToConsole(\"data\", data);\n      logToConsole(\"eventData\", eventData);\n    }\n\n    const eventAtMs = DEFAULT_EVENT_TIME;\n    const eventType = getEventType(integrationPartner);\n\n    const clickId = getClickId(eventData);\n    \n    setClickIdCookie(clickId);\n\n    const eventMetadata = getEventMetadata(config, eventData);\n\n    const userData = getUserData(eventData);\n\n    const mappedEventData = {\n      event_at: eventAtMs,\n      action_source: data.actionSource || \u0027WEBSITE\u0027,\n      event_source_url: eventData.page_location,\n      type: eventType,\n      click_id: clickId,\n      metadata: eventMetadata,\n      user: userData,\n    };\n    if (TEST_ID) {\n      logToConsole(\"mappedEventData\", mappedEventData);\n    }\n\n    return resolve({\n      eventPayload: mappedEventData,\n      partner: integrationPartner,\n    });\n  });\n}\n\nfunction getEventType(integrationPartner) {\n  return {\n    tracking_type: integrationPartner === CONSTANTS.CAPI_PARTNER ? mapTrackingType(data.eventType) : data.eventType,\n    custom_event_name: data.eventType === \"Custom\" ? data.customEventName : undefined,\n  };\n}\n\nfunction mapTrackingType(name) {\n  return CONSTANTS.TRACKING_TYPE_MAPPING[name];\n}\n\nfunction getClickId(eventData) {\n  const clickId =\n    getClickIdFromURL(eventData.page_location) ||\n    getClickIdFromCookie() ||\n    getClickIdFromEvent(eventData);\n  if (clickId) {\n    return clickId;\n  }\n}\n\nfunction getClickIdFromURL(pageUrl) {\n  const url = parseUrl(pageUrl);\n  if (!url || !url.searchParams) {\n    return;\n  }\n\n  const clickIds = url.searchParams[CONSTANTS.CLICK_ID_URL_NAME];\n\n  // =0 click IDs\n  if (!clickIds) {\n    return;\n  }\n\n  let clickId;\n  if (getType(clickIds) === \"string\") {\n    // =1 click IDs\n    clickId = makeString(clickIds);\n  } else if (getType(clickIds) === \"array\") {\n    // \u003e1 click IDs\n    // use first value\n    clickId = makeString(clickIds[0]);\n  } else {\n    return;\n  }\n\n  if (TEST_ID) {\n    logToConsole(\"url-cid\", clickId);\n  }\n\n  return clickId;\n}\n\nfunction getClickIdFromEvent(eventData) {\n  const clickId = eventData[CONSTANTS.CLICK_ID_EVENT_NAME];\n  if (TEST_ID) {\n    logToConsole(\"event-cid\", clickId);\n  }\n\n  if (clickId) {\n    return makeString(clickId);\n  }\n}\n\nfunction getClickIdFromCookie() {\n  const clickIds = getCookieValues(CONSTANTS.CLICK_ID_COOKIE_NAME);\n  if (TEST_ID) {\n    logToConsole(\"cookie-cid\", clickIds);\n  }\n\n  // =0 click IDs\n  if (!clickIds || clickIds.length === 0) {\n    return;\n  }\n\n  // \u003e=1 click IDs\n  // use first value\n  const clickID = clickIds[0];\n\n  if (clickID) {\n    return makeString(clickID);\n  }\n}\n\nfunction setClickIdCookie(clickId) {\n  if (clickId \u0026\u0026 data.enableFirstPartyCookies) {\n    setCookie(CONSTANTS.CLICK_ID_COOKIE_NAME, clickId, {\n      domain: \"auto\",\n      path: \"/\",\n      samesite: \"strict\",\n      httpOnly: false,\n      \"max-age\": CONSTANTS.CLICK_ID_COOKIE_EXPIRATION_SECONDS,\n      secure: true,\n    });\n\n    if (TEST_ID) {\n      logToConsole(\"set-cookie-cid\", clickId);\n    }\n  }\n}\n\nvar formatCategories = function (item) {\n  var categories = [];\n  var categoryLevels = [\n    \"item_category\",\n    \"item_category2\",\n    \"item_category3\",\n    \"item_category4\",\n    \"item_category5\",\n  ];\n\n  for (var i = 0; i \u003c categoryLevels.length; i++) {\n    var key = categoryLevels[i];\n    if (item[key]) {\n      var value = item[key].trim();\n      if (value !== \"\") {\n        categories.push(value);\n      }\n    }\n  }\n\n  return categories.length \u003e 0 ? categories.join(\" \u003e \") : null;\n};\n\nfunction processEcommerceItems(items) {\n  if (!items || items.length === 0) {\n    return {\n      products: null,\n      itemCount: 0,\n    };\n  }\n\n  let processedItems = [];\n  let processedItemCount = 0;\n\n  for (const item of items) {\n    if (!item) return;\n\n    let product = {};\n    if (item.item_id) product.id = makeString(item.item_id);\n    if (item.item_name) product.name = makeString(item.item_name);\n    let itemCategory = formatCategories(item);\n    if (itemCategory) product.category = makeString(itemCategory);\n\n    processedItems.push(product);\n    let itemQuantity =\n      item.quantity !== undefined \u0026\u0026 item.quantity !== null ? makeInteger(item.quantity) : 1;\n    processedItemCount += itemQuantity;\n  }\n\n  return {\n    products: processedItems,\n    itemCount: processedItemCount,\n  };\n}\n\nfunction processProductData(config, eventData) {\n  let finalProducts;\n  let finalItemCount;\n\n  // Determine the item count with priority: UI \u003e Web Manual\n  finalItemCount = config.itemCount || eventData.item_count;\n\n  // Prioritize manually configured products from config (UI)\n  if (\n    config.productInputType === \"entryManual\" \u0026\u0026\n    config.productsRows \u0026\u0026\n    config.productsRows.length \u003e 0\n  ) {\n    finalProducts = config.productsRows;\n  } else if (config.productInputType === \"entryJSON\" \u0026\u0026 config.productsJSON) {\n    finalProducts = JSON.parse(config.productsJSON);\n    if (!finalProducts) {\n      logToConsole(\"Products JSON payload is malformed.\");\n      return null;\n    }\n  } else if (eventData.ecommerce_items) {\n    // Fallback to handle ecommerce items from web container\n    const ecommerceItems = JSON.parse(eventData.ecommerce_items);\n    const ecommerceResult = processEcommerceItems(ecommerceItems);\n    finalProducts = ecommerceResult.products;\n    finalItemCount = ecommerceResult.itemCount;\n  } else if (eventData.product_data) {\n    // Fallback to handle raw product data from web container\n    if (getType(eventData.product_data) === \"string\") {\n      finalProducts = JSON.parse(eventData.product_data);\n      if (!finalProducts) {\n        logToConsole(\n          \"Product data JSON payload is malformed. Products will be omitted.\"\n        );\n        finalProducts = null;\n      }\n    } else if (getType(eventData.product_data) === \"array\") {\n      finalProducts = eventData.product_data;\n    } else {\n      logToConsole(\n        \"Product data is not in expected format. Products will be omitted.\"\n      );\n      finalProducts = null;\n    }\n  }\n\n  return {\n    products: finalProducts,\n    itemCount: finalItemCount,\n  };\n}\n\nfunction getEventMetadata(config, eventData) {\n  let eventMetadata = {};\n\n  const conversionId = config.conversionId || eventData.conversion_id;\n  if (conversionId) {\n    eventMetadata.conversion_id = makeString(conversionId);\n  }\n\n  let transactionValue;\n  if (\n    config.transactionValue !== undefined \u0026\u0026\n    config.transactionValue !== null\n  ) {\n    transactionValue = config.transactionValue;\n  } else if (eventData.value !== undefined \u0026\u0026 eventData.value !== null) {\n    transactionValue = eventData.value;\n  }\n\n  if (transactionValue !== undefined \u0026\u0026 transactionValue !== null) {\n    eventMetadata.value = makeNumber(transactionValue);\n  }\n\n  const currency = config.currency || eventData.currency;\n  if (currency) {\n    eventMetadata.currency = makeString(currency);\n  }\n\n  const productData = processProductData(config, eventData);\n\n  if (productData === null) {\n    return data.gtmOnFailure();\n  }\n\n  if (productData.products \u0026\u0026 productData.products.length \u003e 0) {\n    eventMetadata.products = productData.products;\n  }\n\n  if (productData.itemCount !== undefined \u0026\u0026 productData.itemCount !== null) {\n    eventMetadata.item_count = makeInteger(productData.itemCount);\n  }\n\n  return eventMetadata;\n}\n\nfunction getUUIDFromCookie() {\n  const uuids = getCookieValues(CONSTANTS.UUID_COOKIE_NAME);\n  if (TEST_ID) {\n    logToConsole(\"cookie-uuids\", uuids);\n  }\n\n  if (!uuids || uuids.length === 0) {\n    return;\n  }\n\n  let oldestUUID;\n  let oldestTs;\n  for (let uuid of uuids) {\n    // Find oldest UUID set using timestamp portion\n    // cookie format: timestamp_in_ms.UUIDv4\n    const parts = uuid.split(\".\");\n    if (parts \u0026\u0026 parts.length === 2) {\n      const ts = makeNumber(parts[0]);\n      if (!oldestTs || (ts \u0026\u0026 ts \u003c oldestTs)) {\n        oldestTs = ts;\n        oldestUUID = parts[1];\n      }\n    }\n  }\n\n  if (oldestUUID) {\n    if (TEST_ID) {\n      logToConsole(\"cookie-uuid-oldest\", oldestUUID);\n    }\n    return makeString(oldestUUID);\n  }\n}\n\nfunction getUUIDFromEvent(eventData) {\n  const uuid = eventData[CONSTANTS.UUID_EVENT_NAME];\n  if (TEST_ID) {\n    logToConsole(\"event-uuid\", uuid);\n  }\n\n  if (uuid) {\n    return makeString(uuid);\n  }\n}\n\nfunction getEmailFromCookie() {\n  const emails = getCookieValues(CONSTANTS.EMAIL_COOKIE_NAME);\n  if (TEST_ID) {\n    logToConsole(\"cookie-email\", emails);\n  }\n\n  // =0 emails\n  if (!emails || emails.length === 0) {\n    return;\n  }\n\n  // \u003e=1 emails\n  // use first value\n  const email = emails[0];\n\n  if (email) {\n    return makeString(email);\n  }\n}\n\nfunction getUserData(eventData) {\n  let user = {};\n\n  if (data.enableFirstPartyCookies) {\n    const uuid = getUUIDFromCookie() || getUUIDFromEvent(eventData);\n    if (uuid) {\n      user.uuid = uuid;\n    }\n  }\n\n  if (eventData.user_data) {\n    const email =\n      eventData.user_data.email_address ||\n      eventData.user_data.sha256_email_address;\n    if (email) {\n      user.email = makeString(email);\n    }\n\n    const phoneNumber =\n      eventData.user_data.phone_number ||\n      eventData.user_data.sha256_phone_number;\n    if (phoneNumber) {\n      user.phone_number = makeString(phoneNumber);\n    }\n  }\n\n  if (\n    data.advancedMatching \u0026\u0026\n    data.advancedMatchingParams \u0026\u0026\n    data.advancedMatchingParams.length \u003e 0\n  ) {\n    const params = makeTableMap(data.advancedMatchingParams, \"name\", \"value\");\n\n    if (params) {\n      if (params.aaid) {\n        user.aaid = makeString(params.aaid);\n      }\n      if (params.email) {\n        user.email = makeString(params.email) || getEmailFromCookie();\n      }\n      if (params.externalId) {\n        user.external_id = makeString(params.externalId);\n      }\n      if (params.idfa) {\n        user.idfa = makeString(params.idfa);\n      }\n      if (params.phone_number) {\n        user.phone_number = makeString(params.phone_number);\n      }\n    }\n  }\n\n  if (data.dataProcessingOptions) {\n    let dataProcessing;\n\n    if (data.limitedDataUsageOptions) {\n      dataProcessing = {\n        modes: [\"LDU\"],\n      };\n      if (data.ldu_country) {\n        dataProcessing.country = makeString(data.ldu_country);\n      }\n      if (data.ldu_region) {\n        dataProcessing.region = makeString(data.ldu_region);\n      }\n    }\n\n    if (dataProcessing) {\n      user.data_processing_options = dataProcessing;\n    }\n  }\n\n  if (eventData.ip_override) {\n    user.ip_address = eventData.ip_override;\n  }\n\n  if (eventData.user_agent) {\n    user.user_agent = eventData.user_agent;\n  }\n\n  if (eventData.screen_resolution) {\n    let dimensions = eventData.screen_resolution.split(\"x\");\n    if (dimensions.length === 2) {\n      user.screen_dimensions = {\n        width: makeInteger(dimensions[0]),\n        height: makeInteger(dimensions[1]),\n      };\n    }\n  }\n\n  return user;\n}\n\nfunction sendCAPIRequest(requestData) {\n  const eventPayload = requestData.eventPayload;\n  const integrationPartner = requestData.partner;\n\n  const headers = {\n    \"Content-Type\": \"application/json\",\n    \"User-Agent\": CONSTANTS.API_USER_AGENT,\n    Authorization: \"Bearer \" + CONVERSION_TOKEN,\n  };\n\n  const body = {\n    data: {\n      test_id: TEST_ID,\n      events: [eventPayload],\n      partner: integrationPartner,\n      partner_version: TEMPLATE_VERSION,\n    }\n  };\n\n  if (TEST_ID) {\n    logToConsole(\"url\", CONSTANTS.API_CONVERSIONS_ENDPOINT);\n    logToConsole(\"headers\", headers);\n    logToConsole(\"body\", body);\n  }\n\n  return sendHttpRequest(\n    CONSTANTS.API_CONVERSIONS_ENDPOINT,\n    {\n      method: \"POST\",\n      timeout: CONSTANTS.API_CONVERSIONS_ENDPOINT_TIMEOUT,\n      headers: headers,\n    },\n    JSON.stringify(body)\n  );\n}\n\nfunction handleCAPIResponse(response) {\n  const statusCode = response.statusCode;\n  const body = JSON.parse(response.body);\n\n  if (statusCode \u003e= 200 \u0026\u0026 statusCode \u003c 300) {\n    if (TEST_ID) {\n      logToConsole(\n        \"Conversion API request succeeded with message:\",\n        body.data.message\n      );\n    }\n\n    return data.gtmOnSuccess();\n  } else {\n    logToConsole(\"Conversion API request failed with status code:\", statusCode);\n    logToConsole(\"Conversion API request failed with error:\", body.error);\n    return data.gtmOnFailure();\n  }\n}\n\nreturn collectEventData().then(sendCAPIRequest).then(handleCAPIResponse);\n\n\n___SERVER_PERMISSIONS___\n\n[\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"logging\",\n        \"versionId\": \"1\"\n      },\n      \"param\": [\n        {\n          \"key\": \"environments\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"all\"\n          }\n        }\n      ]\n    },\n    \"clientAnnotations\": {\n      \"isEditedByUser\": true\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"send_http\",\n        \"versionId\": \"1\"\n      },\n      \"param\": [\n        {\n          \"key\": \"allowedUrls\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"specific\"\n          }\n        },\n        {\n          \"key\": \"urls\",\n          \"value\": {\n            \"type\": 2,\n            \"listItem\": [\n              {\n                \"type\": 1,\n                \"string\": \"https://ads-api.reddit.com/api/*\"\n              }\n            ]\n          }\n        }\n      ]\n    },\n    \"clientAnnotations\": {\n      \"isEditedByUser\": true\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"get_cookies\",\n        \"versionId\": \"1\"\n      },\n      \"param\": [\n        {\n          \"key\": \"cookieAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"specific\"\n          }\n        },\n        {\n          \"key\": \"cookieNames\",\n          \"value\": {\n            \"type\": 2,\n            \"listItem\": [\n              {\n                \"type\": 1,\n                \"string\": \"_rdt_uuid\"\n              },\n              {\n                \"type\": 1,\n                \"string\": \"_rdt_cid\"\n              },\n              {\n                \"type\": 1,\n                \"string\": \"_rdt_em\"\n              }\n            ]\n          }\n        }\n      ]\n    },\n    \"clientAnnotations\": {\n      \"isEditedByUser\": true\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"read_event_data\",\n        \"versionId\": \"1\"\n      },\n      \"param\": [\n        {\n          \"key\": \"eventDataAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"any\"\n          }\n        }\n      ]\n    },\n    \"clientAnnotations\": {\n      \"isEditedByUser\": true\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"read_container_data\",\n        \"versionId\": \"1\"\n      },\n      \"param\": []\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"set_cookies\",\n        \"versionId\": \"1\"\n      },\n      \"param\": [\n        {\n          \"key\": \"allowedCookies\",\n          \"value\": {\n            \"type\": 2,\n            \"listItem\": [\n              {\n                \"type\": 3,\n                \"mapKey\": [\n                  {\n                    \"type\": 1,\n                    \"string\": \"name\"\n                  },\n                  {\n                    \"type\": 1,\n                    \"string\": \"domain\"\n                  },\n                  {\n                    \"type\": 1,\n                    \"string\": \"path\"\n                  },\n                  {\n                    \"type\": 1,\n                    \"string\": \"secure\"\n                  },\n                  {\n                    \"type\": 1,\n                    \"string\": \"session\"\n                  }\n                ],\n                \"mapValue\": [\n                  {\n                    \"type\": 1,\n                    \"string\": \"_rdt_cid\"\n                  },\n                  {\n                    \"type\": 1,\n                    \"string\": \"*\"\n                  },\n                  {\n                    \"type\": 1,\n                    \"string\": \"*\"\n                  },\n                  {\n                    \"type\": 1,\n                    \"string\": \"any\"\n                  },\n                  {\n                    \"type\": 1,\n                    \"string\": \"any\"\n                  }\n                ]\n              }\n            ]\n          }\n        }\n      ]\n    },\n    \"clientAnnotations\": {\n      \"isEditedByUser\": true\n    },\n    \"isRequired\": true\n  }\n]\n\n\n___TESTS___\n\nscenarios:\n- name: Verify default populated event_at and partner info\n  code: \"const testData = {};\\n\\nverifyCAPI((requestUrl, requestOptions, requestBody)\\\n    \\ =\u003e {\\n  assertThat(JSON.parse(requestBody).data.events[0].event_at).isDefined();\\n\\\n    \\  assertThat(JSON.parse(requestBody).data.partner).isEqualTo(\u0027SGTM\u0027);\\n  assertThat(JSON.parse(requestBody).data.partner_version).isEqualTo(\u00272.0.0\u0027);\\n\\\n    \\  \\n});\\n\\nrunCode(testData);\"\n- name: When CAPI returns 200, gtmOnSuccess\n  code: |-\n    const testData = {};\n\n    mock(\u0027sendHttpRequest\u0027, (requestUrl, requestOptions, requestBody) =\u003e {\n      return Promise.create((resolve, reject) =\u003e {\n        resolve({ statusCode: 200, body: JSON.stringify(mockSuccessResponse)});\n      });\n    });\n\n    runCode(testData);\n\n    callLater(() =\u003e {\n      assertApi(\u0027gtmOnSuccess\u0027).wasCalled();\n      assertApi(\u0027gtmOnFailure\u0027).wasNotCalled();\n    });\n- name: When CAPI returns 400, gtmOnFailure\n  code: |-\n    const testData = {};\n\n    const mockErrorResponse = {\n      \"error\": {\n        \"code\": 401,\n        \"message\": \"No bearer token provided.\"\n      }\n    };\n\n    mock(\u0027sendHttpRequest\u0027, (requestUrl, requestOptions, requestBody) =\u003e {\n      return Promise.create((resolve, reject) =\u003e {\n        resolve({ statusCode: 400, body: JSON.stringify(mockErrorResponse)});\n      });\n    });\n\n    runCode(testData);\n\n    callLater(() =\u003e {\n      assertApi(\u0027gtmOnSuccess\u0027).wasNotCalled();\n      assertApi(\u0027gtmOnFailure\u0027).wasCalled();\n    });\n- name: Given pixel ID, verify endpoint path\n  code: \"const testData = {\\n  id: \u0027t2_123\u0027,\\n};\\n\\nconst expectedUrl = \u0027https://ads-api.reddit.com/api/v3/pixels/\u0027\\\n    \\ + testData.id + \u0027/conversion_events\u0027;\\n\\nverifyCAPI((requestUrl, requestOptions,\\\n    \\ requestBody) =\u003e {\\n  assertThat(requestUrl).isEqualTo(expectedUrl);\\n  \\n});\\n\\\n    \\nrunCode(testData);\"\n- name: Given WEBSITE actionSource, verify action_source\n  code: |-\n    const testData = {\n      actionSource: \u0027WEBSITE\u0027,\n    };\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].action_source).isEqualTo(\u0027WEBSITE\u0027);\n    });\n\n    runCode(testData);\n- name: Given APP actionSource, verify action_source\n  code: |-\n    const testData = {\n      actionSource: \u0027APP\u0027,\n    };\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].action_source).isEqualTo(\u0027APP\u0027);\n    });\n\n    runCode(testData);\n- name: Given PHYSICAL_STORE actionSource, verify action_source\n  code: |-\n    const testData = {\n      actionSource: \u0027PHYSICAL_STORE\u0027,\n    };\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].action_source).isEqualTo(\u0027PHYSICAL_STORE\u0027);\n    });\n\n    runCode(testData);\n- name: Given OTHER actionSource, verify action_source\n  code: |-\n    const testData = {\n      actionSource: \u0027OTHER\u0027,\n    };\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].action_source).isEqualTo(\u0027OTHER\u0027);\n    });\n\n    runCode(testData);\n- name: Given page_location, verify event_source_url\n  code: |-\n    const testData = {\n    };\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        page_location: \"https://example.com\"\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].event_source_url).isEqualTo(\u0027https://example.com\u0027);\n    });\n\n    runCode(testData);\n- name: Given standard eventType, verify tracking_type\n  code: |-\n    const testData = {\n      eventType: \u0027PageVisit\u0027,\n    };\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].type.tracking_type).isEqualTo(\u0027PAGE_VISIT\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].type.custom_event_name).isUndefined();\n    });\n\n    runCode(testData);\n- name: Given custom eventType, verify custom_event_name\n  code: |-\n    const testData = {\n      eventType: \u0027Custom\u0027,\n      customEventName: \u0027test_custom_event\u0027,\n    };\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].type.tracking_type).isEqualTo(\u0027CUSTOM\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].type.custom_event_name).isEqualTo(\u0027test_custom_event\u0027);\n    });\n\n    runCode(testData);\n- name: Given AUTOMATIC_GTM partner, verify tracking type not overriden\n  code: |-\n    const testData = {\n      eventType: \u0027add_to_cart\u0027,\n    };\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        integration_partner: \"AUTOMATIC_GTM\"\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].type.tracking_type).isEqualTo(\u0027add_to_cart\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].type.custom_event_name).isUndefined();\n    });\n\n    runCode(testData);\n- name: Given event click ID, verify click_id\n  code: |-\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        rdt_cid: \u0027test_click_id\u0027,\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].click_id).isEqualTo(\u0027test_click_id\u0027);\n    });\n\n    runCode(testData);\n- name: Given event and cookie click ID, verify cookie overrides event\n  code: |-\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        rdt_cid: \u0027test_click_id\u0027,\n      };\n    });\n\n    mock(\u0027getCookieValues\u0027, (key) =\u003e {\n      if (key == \"_rdt_cid\") {\n        return [\n          \u0027click_id_1\u0027,\n          \u0027click_id_2\u0027,\n        ];\n      }\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].click_id).isEqualTo(\u0027click_id_1\u0027);\n    });\n\n    runCode(testData);\n- name: Given event, cookie and URL click ID, verify URL overrides all\n  code: |-\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        rdt_cid: \u0027test_click_id\u0027,\n        page_location: \"https://sample.com/?rdt_cid=url_click_id\"\n      };\n    });\n\n    mock(\u0027getCookieValues\u0027, (key) =\u003e {\n      if (key == \"_rdt_cid\") {\n        return [\n          \u0027click_id_1\u0027,\n          \u0027click_id_2\u0027,\n        ];\n      }\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].click_id).isEqualTo(\u0027url_click_id\u0027);\n    });\n\n    runCode(testData);\n- name: Given only event currency, verify currency in metadata\n  code: |-\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        currency: \u0027USD\u0027,\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.currency).isEqualTo(\u0027USD\u0027);\n    });\n\n    runCode(testData);\n- name: Given both tag and event currency, verify tag definition overrides event\n  code: |-\n    const testData = {\n      currency: \u0027USD\u0027,\n    };\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        currency: \u0027CAD\u0027,\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.currency).isEqualTo(\u0027USD\u0027);\n    });\n\n    runCode(testData);\n- name: Given only event value, verify value in metadata\n  code: |-\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        value: 10.99,\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.value).isEqualTo(10.99);\n    });\n\n    runCode(testData);\n- name: Given both tag trasactionValue and event value, verify tag definition overrides\n    event\n  code: |-\n    const testData = {\n      transactionValue: 10.99,\n    };\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        value: 1.99,\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.value).isEqualTo(10.99);\n    });\n\n    runCode(testData);\n- name: Given only event item_count, verify item_count in metadata\n  code: |-\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        item_count: 2\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.item_count).isEqualTo(2);\n    });\n\n    runCode(testData);\n- name: Given both tag itemCount and event item_count, verify tag defeinition overrides\n    event\n  code: |-\n    const testData = {\n      itemCount: 2\n    };\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        item_count: 1\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.item_count).isEqualTo(2);\n    });\n\n    runCode(testData);\n- name: Given event ecommerce_items, verify products override event item_count\n  code: |-\n    const testData = {};\n\n    const items = [\n      {\n        item_id: \u00271\u0027,\n        item_name: \u0027product_a\u0027,\n        item_category: \u0027a1\u0027,\n        item_category2: \u0027a2\u0027,\n        item_category3: \u0027a3\u0027,\n        item_category4: \u0027a4\u0027,\n        item_category5: \u0027a5\u0027\n      },\n      {\n        item_id: \u00272\u0027,\n        item_name: \u0027product_b\u0027,\n        item_category: \u0027b1\u0027,\n        item_category2: \u0027b2\u0027\n      }\n    ];\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        item_count: 1,\n        ecommerce_items: JSON.stringify(items)\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.item_count).isEqualTo(2);\n    });\n\n    runCode(testData);\n- name: Given event ecommerce_items, verify products override tag itemCount\n  code: |-\n    const testData = {\n      itemCount: 1\n    };\n\n    const items = [\n      {\n        item_id: \u00271\u0027,\n        item_name: \u0027product_a\u0027,\n        item_category: \u0027a1\u0027,\n        item_category2: \u0027a2\u0027,\n        item_category3: \u0027a3\u0027,\n        item_category4: \u0027a4\u0027,\n        item_category5: \u0027a5\u0027\n      },\n      {\n        item_id: \u00272\u0027,\n        item_name: \u0027product_b\u0027,\n        item_category: \u0027b1\u0027,\n        item_category2: \u0027b2\u0027\n      }\n    ];\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        ecommerce_items: JSON.stringify(items)\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.item_count).isEqualTo(2);\n    });\n\n    runCode(testData);\n- name: Given tag productsRows, verify metadata products\n  code: |-\n    const testData = {\n      productInputType: \u0027entryManual\u0027,\n      productsRows: [\n        {\n          id: \u00271\u0027,\n          name: \u0027product_a\u0027,\n          category: \u0027a1 \u003e a2 \u003e a3 \u003e a4 \u003e a5\u0027\n        },\n        {\n          id: \u00272\u0027,\n          name: \u0027product_b\u0027,\n          category: \u0027b1 \u003e b2\u0027\n        }\n      ]\n    };\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].id).isEqualTo(\u00271\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].name).isEqualTo(\u0027product_a\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].category).isEqualTo(\u0027a1 \u003e a2 \u003e a3 \u003e a4 \u003e a5\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].id).isEqualTo(\u00272\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].name).isEqualTo(\u0027product_b\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].category).isEqualTo(\u0027b1 \u003e b2\u0027);\n    });\n\n    runCode(testData);\n- name: Given tag productsJSON, verify metadata products\n  code: |-\n    const products = [\n      {\n        id: \u00271\u0027,\n        name: \u0027product_a\u0027,\n        category: \u0027a1 \u003e a2 \u003e a3 \u003e a4 \u003e a5\u0027\n      },\n      {\n        id: \u00272\u0027,\n        name: \u0027product_b\u0027,\n        category: \u0027b1 \u003e b2\u0027\n      }\n    ];\n\n    const testData = {\n      productInputType: \u0027entryJSON\u0027,\n      productsJSON: JSON.stringify(products)\n    };\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].id).isEqualTo(\u00271\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].name).isEqualTo(\u0027product_a\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].category).isEqualTo(\u0027a1 \u003e a2 \u003e a3 \u003e a4 \u003e a5\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].id).isEqualTo(\u00272\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].name).isEqualTo(\u0027product_b\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].category).isEqualTo(\u0027b1 \u003e b2\u0027);\n    });\n\n    runCode(testData);\n- name: Given event ecommerce_items, verify metadata products\n  code: |-\n    const testData = {};\n\n    const items = [\n      {\n        item_id: \u00271\u0027,\n        item_name: \u0027product_a\u0027,\n        item_category: \u0027a1\u0027,\n        item_category2: \u0027a2\u0027,\n        item_category3: \u0027a3\u0027,\n        item_category4: \u0027a4\u0027,\n        item_category5: \u0027a5\u0027\n      },\n      {\n        item_id: \u00272\u0027,\n        item_name: \u0027product_b\u0027,\n        item_category: \u0027b1\u0027,\n        item_category2: \u0027b2\u0027\n      }\n    ];\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        ecommerce_items: JSON.stringify(items)\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].id).isEqualTo(\u00271\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].name).isEqualTo(\u0027product_a\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].category).isEqualTo(\u0027a1 \u003e a2 \u003e a3 \u003e a4 \u003e a5\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].id).isEqualTo(\u00272\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].name).isEqualTo(\u0027product_b\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].category).isEqualTo(\u0027b1 \u003e b2\u0027);\n    });\n\n    runCode(testData);\n- name: Given event product_data string, verify metadata products\n  code: |-\n    const products = [\n      {\n        id: \u00271\u0027,\n        name: \u0027product_a\u0027,\n        category: \u0027a1 \u003e a2 \u003e a3 \u003e a4 \u003e a5\u0027\n      },\n      {\n        id: \u00272\u0027,\n        name: \u0027product_b\u0027,\n        category: \u0027b1 \u003e b2\u0027\n      }\n    ];\n\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        product_data: JSON.stringify(products)\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].id).isEqualTo(\u00271\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].name).isEqualTo(\u0027product_a\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].category).isEqualTo(\u0027a1 \u003e a2 \u003e a3 \u003e a4 \u003e a5\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].id).isEqualTo(\u00272\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].name).isEqualTo(\u0027product_b\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].category).isEqualTo(\u0027b1 \u003e b2\u0027);\n    });\n\n    runCode(testData);\n- name: Given event product_data array, verify metadata products\n  code: |-\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        product_data: [\n          {\n            id: \u00271\u0027,\n            name: \u0027product_a\u0027,\n            category: \u0027a1 \u003e a2 \u003e a3 \u003e a4 \u003e a5\u0027\n          },\n          {\n            id: \u00272\u0027,\n            name: \u0027product_b\u0027,\n            category: \u0027b1 \u003e b2\u0027\n          }\n        ]\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].id).isEqualTo(\u00271\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].name).isEqualTo(\u0027product_a\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[0].category).isEqualTo(\u0027a1 \u003e a2 \u003e a3 \u003e a4 \u003e a5\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].id).isEqualTo(\u00272\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].name).isEqualTo(\u0027product_b\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].metadata.products[1].category).isEqualTo(\u0027b1 \u003e b2\u0027);\n    });\n\n    runCode(testData);\n- name: Given event UUID, verify user\n  code: |-\n    const testData = {\n      enableFirstPartyCookies: true,\n    };\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        rdt_uuid: \"test_uuid\"\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.uuid).isEqualTo(\u0027test_uuid\u0027);\n    });\n\n    runCode(testData);\n- name: Given both cookie and event UUID, verify cookie oldest UUID overrides event\n  code: |-\n    const testData = {\n      enableFirstPartyCookies: true,\n    };\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        rdt_uuid: \"dummy_uuid\"\n      };\n    });\n\n    mock(\u0027getCookieValues\u0027, (key) =\u003e {\n      if (key == \"_rdt_uuid\") {\n        return [\n          \u00272.new_uuid\u0027,\n          \u00271.oldest_uuid\u0027,\n        ];\n      }\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.uuid).isEqualTo(\u0027oldest_uuid\u0027);\n    });\n\n    runCode(testData);\n- name: Given event email and phone number, verify user has both\n  code: |-\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        user_data: {\n          email_address: \"dummy@example.com\",\n          phone_number: \"+11234567890\",\n        }\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.email).isEqualTo(\u0027dummy@example.com\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].user.phone_number).isEqualTo(\u0027+11234567890\u0027);\n    });\n\n    runCode(testData);\n- name: Given both tag and event user data, verify tag params override event\n  code: |-\n    const testData = {\n      advancedMatching: true,\n      advancedMatchingParams: [\n        {\n          name: \"email\",\n          value: \"dummy@example.com\",\n        },\n        {\n          name: \"phone_number\",\n          value: \"+11234567890\",\n        }\n      ]\n    };\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        user_data: {\n          email_address: \"dummy@test.com\",\n          phone_number: \"+10987654321\",\n        }\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.email).isEqualTo(\u0027dummy@example.com\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].user.phone_number).isEqualTo(\u0027+11234567890\u0027);\n    });\n\n    runCode(testData);\n- name: Given advanced matching IDs, verify user has all IDs\n  code: |-\n    const testData = {\n      advancedMatching: true,\n      advancedMatchingParams: [\n        {\n          name: \"aaid\",\n          value: \"test_aaid\",\n        },\n        {\n          name: \"externalId\",\n          value: \"test_external_id\",\n        },\n        {\n          name: \"idfa\",\n          value: \"test_idfa\",\n        }\n      ]\n    };\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.aaid).isEqualTo(\u0027test_aaid\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].user.external_id).isEqualTo(\u0027test_external_id\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].user.idfa).isEqualTo(\u0027test_idfa\u0027);\n    });\n\n    runCode(testData);\n- name: Given data processing options, verify user has data processing options\n  code: |-\n    const testData = {\n      dataProcessingOptions: true,\n      limitedDataUsageOptions: true,\n      ldu_country: \"US\",\n      ldu_region: \"US-CA\",\n    };\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.data_processing_options.modes[0]).isEqualTo(\u0027LDU\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].user.data_processing_options.country).isEqualTo(\u0027US\u0027);\n      assertThat(JSON.parse(requestBody).data.events[0].user.data_processing_options.region).isEqualTo(\u0027US-CA\u0027);\n    });\n\n    runCode(testData);\n- name: Given event ip_override, verify user has ip_address\n  code: |-\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        ip_override: \"123.456.78.90\",\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.ip_address).isEqualTo(\u0027123.456.78.90\u0027);\n    });\n\n    runCode(testData);\n- name: Given event user_agent, verify user has user_agent\n  code: |-\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        user_agent: \"test_user_agent\",\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.user_agent).isEqualTo(\u0027test_user_agent\u0027);\n    });\n\n    runCode(testData);\n- name: Given event screen_resolution, verify user has screen_dimensions\n  code: |-\n    const testData = {};\n\n    mock(\u0027getAllEventData\u0027, () =\u003e {\n      return {\n        screen_resolution: \"1920x1080\",\n      };\n    });\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.screen_dimensions.width).isEqualTo(1920);\n      assertThat(JSON.parse(requestBody).data.events[0].user.screen_dimensions.height).isEqualTo(1080);\n    });\n\n    runCode(testData);\n- name: Given conversion access token, verify request header has bearer token\n  code: |-\n    const testData = {\n      conversionToken: \"test_capi_token\"\n    };\n\n    verifyCAPI(function(requestUrl, requestOptions, requestBody) {\n      assertThat(requestOptions.headers.Authorization).isEqualTo(\u0027Bearer \u0027 + testData.conversionToken);\n    });\n\n    runCode(testData);\n- name: Given no email in user_data, verify email is not set in user object\n  code: |\n    const testData = {};\n\n    mock(\"getAllEventData\", () =\u003e {\n      return {\n        user_data: {\n          phone_number: \"+11234567890\",\n        },\n      };\n    });\n\n    verifyCAPI(function (requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.email).isUndefined();\n      assertThat(\n        JSON.parse(requestBody).data.events[0].user.phone_number\n      ).isEqualTo(\"+11234567890\");\n    });\n\n    runCode(testData);\n- name: Given no phone_number in user_data, verify phone_number is not set in user\n    object\n  code: |\n    const testData = {};\n\n    mock(\"getAllEventData\", () =\u003e {\n      return {\n        user_data: {\n          email_address: \"dummy@example.com\",\n        },\n      };\n    });\n\n    verifyCAPI(function (requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.email).isEqualTo(\n        \"dummy@example.com\"\n      );\n      assertThat(\n        JSON.parse(requestBody).data.events[0].user.phone_number\n      ).isUndefined();\n    });\n\n    runCode(testData);\n- name: Given empty user_data object, verify email and phone_number are not set\n  code: |\n    const testData = {};\n\n    mock(\"getAllEventData\", () =\u003e {\n      return {\n        user_data: {},\n      };\n    });\n\n    verifyCAPI(function (requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].user.email).isUndefined();\n      assertThat(\n        JSON.parse(requestBody).data.events[0].user.phone_number\n      ).isUndefined();\n    });\n\n    runCode(testData);\n- name: Given URL click ID and enableFirstPartyCookies true, verify cookie is set\n  code: |\n    const testData = {\n      enableFirstPartyCookies: true,\n    };\n\n    let cookieWasSet = false;\n    let cookieName = \"\";\n    let cookieValue = \"\";\n    let cookieOptions = {};\n\n    mock(\"getAllEventData\", () =\u003e {\n      return {\n        page_location: \"https://example.com/?rdt_cid=test_click_id_123\",\n      };\n    });\n\n    mock(\"setCookie\", (name, value, options) =\u003e {\n      cookieWasSet = true;\n      cookieName = name;\n      cookieValue = value;\n      cookieOptions = options;\n    });\n\n    verifyCAPI(function (requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].click_id).isEqualTo(\n        \"test_click_id_123\"\n      );\n    });\n\n    runCode(testData);\n\n    callLater(() =\u003e {\n      assertThat(cookieWasSet).isEqualTo(true);\n      assertThat(cookieName).isEqualTo(\"_rdt_cid\");\n      assertThat(cookieValue).isEqualTo(\"test_click_id_123\");\n      assertThat(cookieOptions.domain).isEqualTo(\"auto\");\n      assertThat(cookieOptions.path).isEqualTo(\"/\");\n      assertThat(cookieOptions.samesite).isEqualTo(\"strict\");\n      assertThat(cookieOptions.secure).isEqualTo(true);\n      assertThat(cookieOptions.httpOnly).isEqualTo(false);\n      assertThat(cookieOptions[\"max-age\"]).isEqualTo(7776000);\n    });\n- name: Given URL click ID and enableFirstPartyCookies false, verify cookie is not\n    set\n  code: |\n    const testData = {\n      enableFirstPartyCookies: false,\n    };\n\n    let cookieWasSet = false;\n\n    mock(\"getAllEventData\", () =\u003e {\n      return {\n        page_location: \"https://example.com/?rdt_cid=test_click_id_123\",\n      };\n    });\n\n    mock(\"setCookie\", (name, value, options) =\u003e {\n      cookieWasSet = true;\n    });\n\n    verifyCAPI(function (requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].click_id).isEqualTo(\n        \"test_click_id_123\"\n      );\n    });\n\n    runCode(testData);\n\n    callLater(() =\u003e {\n      assertThat(cookieWasSet).isEqualTo(false);\n    });\n- name: Given existing cookie click ID, verify cookie is refreshed with same value\n  code: |\n    const testData = {\n      enableFirstPartyCookies: true,\n    };\n\n    let cookieWasSet = false;\n    let cookieValue = \"\";\n\n    mock(\"getAllEventData\", () =\u003e {\n      return {\n        page_location: \"https://example.com/page2\",\n      };\n    });\n\n    mock(\"getCookieValues\", (key) =\u003e {\n      if (key == \"_rdt_cid\") {\n        return [\"existing_click_id\"];\n      }\n    });\n\n    mock(\"setCookie\", (name, value, options) =\u003e {\n      cookieWasSet = true;\n      cookieValue = value;\n    });\n\n    verifyCAPI(function (requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].click_id).isEqualTo(\n        \"existing_click_id\"\n      );\n    });\n\n    runCode(testData);\n\n    callLater(() =\u003e {\n      assertThat(cookieWasSet).isEqualTo(true);\n      assertThat(cookieValue).isEqualTo(\"existing_click_id\");\n    });\n- name: Given URL and cookie click ID, verify URL overrides and cookie is updated\n  code: |\n    const testData = {\n      enableFirstPartyCookies: true,\n    };\n\n    let cookieValue = \"\";\n\n    mock(\"getAllEventData\", () =\u003e {\n      return {\n        page_location: \"https://example.com/?rdt_cid=new_click_id\",\n      };\n    });\n\n    mock(\"getCookieValues\", (key) =\u003e {\n      if (key == \"_rdt_cid\") {\n        return [\"old_click_id\"];\n      }\n    });\n\n    mock(\"setCookie\", (name, value, options) =\u003e {\n      cookieValue = value;\n    });\n\n    verifyCAPI(function (requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].click_id).isEqualTo(\n        \"new_click_id\"\n      );\n    });\n\n    runCode(testData);\n\n    callLater(() =\u003e {\n      assertThat(cookieValue).isEqualTo(\"new_click_id\");\n    });\n- name: Given no click ID anywhere, verify cookie is not set\n  code: |\n    const testData = {\n      enableFirstPartyCookies: true,\n    };\n\n    let cookieWasSet = false;\n\n    mock(\"getAllEventData\", () =\u003e {\n      return {\n        page_location: \"https://example.com/page\",\n      };\n    });\n\n    mock(\"setCookie\", (name, value, options) =\u003e {\n      cookieWasSet = true;\n    });\n\n    verifyCAPI(function (requestUrl, requestOptions, requestBody) {\n      assertThat(JSON.parse(requestBody).data.events[0].click_id).isUndefined();\n    });\n\n    runCode(testData);\n\n    callLater(() =\u003e {\n      assertThat(cookieWasSet).isEqualTo(false);\n    });\nsetup: |-\n  const JSON = require(\u0027JSON\u0027);\n  const Promise = require(\u0027Promise\u0027);\n  const callLater = require(\u0027callLater\u0027);\n\n  const mockSuccessResponse = {\n    \"data\": {\n      \"message\": \"Successfully processed 1 conversion events.\"\n    }\n  };\n\n  function verifyCAPI(verify) {\n    return mock(\u0027sendHttpRequest\u0027, (requestUrl, requestOptions, requestBody) =\u003e {\n      verify(requestUrl, requestOptions, requestBody);\n      return Promise.create((resolve, reject) =\u003e {\n        resolve({ statusCode: 200, body: JSON.stringify(mockSuccessResponse)});\n      });\n    });\n  }\n\n\n___NOTES___\n\nCreated on 01/11/2023, 00:00:00\nUpdated on 29/11/2023, 00:00:00\n\n\n",
+                                                        "galleryReference":  {
+                                                                                 "host":  "github.com",
+                                                                                 "owner":  "reddit",
+                                                                                 "repository":  "reddit-ss-gtm-template",
+                                                                                 "version":  "9208356141f79d249c634dfc4252bd28408b542a",
+                                                                                 "signature":  "1dedd42f9d731f23c96db40ba5f82ebfaa642699bc2c7ea7fab8af1f802ba161",
+                                                                                 "galleryTemplateId":  "M6PJS"
+                                                                             }
+                                                    }
+                                                ],
+                             "client":  [
+                                            {
+                                                "accountId":  "6348717123",
+                                                "containerId":  "248775717",
+                                                "clientId":  "1",
+                                                "name":  "GA4",
+                                                "type":  "gaaw_client",
+                                                "parameter":  [
+                                                                  {
+                                                                      "type":  "BOOLEAN",
+                                                                      "key":  "activateDefaultPaths",
+                                                                      "value":  "true"
+                                                                  },
+                                                                  {
+                                                                      "type":  "TEMPLATE",
+                                                                      "key":  "cookieManagement",
+                                                                      "value":  "server"
+                                                                  },
+                                                                  {
+                                                                      "type":  "TEMPLATE",
+                                                                      "key":  "cookieName",
+                                                                      "value":  "FPID"
+                                                                  },
+                                                                  {
+                                                                      "type":  "TEMPLATE",
+                                                                      "key":  "cookieDomain",
+                                                                      "value":  "auto"
+                                                                  },
+                                                                  {
+                                                                      "type":  "TEMPLATE",
+                                                                      "key":  "cookiePath",
+                                                                      "value":  "/"
+                                                                  },
+                                                                  {
+                                                                      "type":  "TEMPLATE",
+                                                                      "key":  "cookieMaxAgeInSec",
+                                                                      "value":  "63072000"
+                                                                  }
+                                                              ],
+                                                "fingerprint":  "1775663936214"
+                                            }
+                                        ]
+                         }
+}

@@ -213,6 +213,56 @@ app.get('/cs-pixel-guard.js', async (req, res) => {
   }
 });
 
+function applyTurnstileCors(req, res) {
+  const origin = typeof req.headers.origin === 'string' ? req.headers.origin : '';
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cache-Control', 'no-store');
+}
+
+app.options('/api/turnstile-verify', (req, res) => {
+  applyTurnstileCors(req, res);
+  return res.status(204).end();
+});
+
+app.post('/api/turnstile-verify', async (req, res) => {
+  applyTurnstileCors(req, res);
+
+  const token = typeof req.body?.token === 'string' ? req.body.token.slice(0, 2048) : '';
+  const action = typeof req.body?.action === 'string' ? req.body.action.slice(0, 50) : '';
+
+  if (!token) {
+    return res.status(400).json({ ok: false, error: 'missing_token' });
+  }
+
+  try {
+    const upstream = await fetch(`${WORKER_ORIGIN}/api/turnstile-verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'commerce-shield-render-proxy/1.0',
+      },
+      body: JSON.stringify({ token, action }),
+    });
+
+    const bodyText = await upstream.text();
+    let jsonBody;
+    try {
+      jsonBody = JSON.parse(bodyText);
+    } catch {
+      jsonBody = { ok: false, error: 'invalid_upstream_response' };
+    }
+
+    return res.status(upstream.status).json(jsonBody);
+  } catch (err) {
+    // Fail open on upstream transport errors to avoid login friction for humans.
+    log('warn', `turnstile proxy upstream error: ${err.message}`);
+    return res.status(200).json({ ok: true, note: 'upstream_error' });
+  }
+});
+
 // Health check
 app.get('/api/health', (_req, res) => res.json({ ok: true, timestamp: new Date().toISOString() }));
 

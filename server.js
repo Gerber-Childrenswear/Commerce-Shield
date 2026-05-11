@@ -58,6 +58,9 @@ app.use((_req, res, next) => {
   next();
 });
 
+// Parse JSON bodies (for signer and other API endpoints)
+app.use(express.json({ limit: '10mb' }));
+
 // Serve static admin UI (built by scripts/gen-ui.cjs from worker/src/index.js)
 app.use(express.static('public'));
 
@@ -212,6 +215,53 @@ app.get('/cs-pixel-guard.js', async (req, res) => {
 
 // Health check
 app.get('/api/health', (_req, res) => res.json({ ok: true, timestamp: new Date().toISOString() }));
+
+// GTM Signer: edge bot events
+app.post('/api/integrations/edge-bot-event', async (req, res) => {
+  try {
+    const secret = process.env.EDGE_BOT_SHARED_SECRET;
+    if (!secret) {
+      return res.status(503).json({ error: 'Signer not configured: EDGE_BOT_SHARED_SECRET is missing' });
+    }
+
+    const bodyString = JSON.stringify(req.body);
+    const timestamp = Date.now().toString();
+    const nonce = crypto.randomBytes(16).toString('hex');
+    
+    // Create HMAC signature: sha256(timestamp.nonce.body) with base64 secret
+    const message = `${timestamp}.${nonce}.${bodyString}`;
+    const signature = 'sha256=' + crypto
+      .createHmac('sha256', Buffer.from(secret, 'base64'))
+      .update(message)
+      .digest('hex');
+
+    // Forward to Worker with signed headers
+    const workerUrl = `${WORKER_ORIGIN}/api/integrations/edge-bot-event`;
+    const response = await fetch(workerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CS-Timestamp': timestamp,
+        'X-CS-Nonce': nonce,
+        'X-CS-Signature': signature,
+      },
+      body: bodyString,
+    });
+
+    const responseBody = await response.text();
+    let responseJson;
+    try {
+      responseJson = JSON.parse(responseBody);
+    } catch (e) {
+      responseJson = { body: responseBody };
+    }
+
+    res.status(response.status).json(responseJson);
+  } catch (err) {
+    log('error', `Signer error: ${err.message}`);
+    res.status(500).json({ error: 'Signer service error', details: err.message });
+  }
+});
 
 // Catch-all -> index.html
 app.get('*', (_req, res) => res.sendFile('index.html', { root: 'public' }));

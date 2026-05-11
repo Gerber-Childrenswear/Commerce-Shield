@@ -230,7 +230,7 @@ app.post('/api/integrations/edge-bot-event', async (req, res) => {
     
     // Create HMAC signature: sha256(timestamp.nonce.body) with base64 secret
     const message = `${timestamp}.${nonce}.${bodyString}`;
-    const signature = 'sha256=' + crypto
+    const signature = crypto
       .createHmac('sha256', Buffer.from(secret, 'base64'))
       .update(message)
       .digest('hex');

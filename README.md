@@ -81,6 +81,23 @@ npm run worker:deploy
 
 Copy `worker/.dev.vars.example` to `worker/.dev.vars` and fill required secrets before local dev or deploy.
 
+## Cloudflare Usage Helper Scripts
+
+Two local helper scripts under `scripts/` query Cloudflare GraphQL for recent Worker request volume:
+
+- `node scripts/cf-volume.cjs`
+- `node scripts/cf-volume2.cjs`
+
+They require these environment variables:
+
+```powershell
+$env:CLOUDFLARE_API_TOKEN = '<token>'
+$env:CLOUDFLARE_ACCOUNT_ID = '<account-id>'
+$env:CLOUDFLARE_WORKER_NAME = 'commerce-shield-prod' # optional
+```
+
+`CLOUDFLARE_WORKER_NAME` defaults to `commerce-shield-prod` when not set.
+
 ## Deployment Workflow
 
 1. All changes land in `ncassidy233/commerce-shield` first

@@ -1,22 +1,19 @@
 'use strict';
 
-const crypto = require('crypto');
 const express = require('express');
+const crypto = require('crypto');
 
 const WORKER_ORIGIN = process.env.WORKER_ORIGIN || 'https://commerce-shield-prod.ncassidy.workers.dev';
-
-// Shopify OAuth config
-const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || 'dc386b789af148f54d80b54d07e63215';
-const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
-const SHOPIFY_SCOPES = process.env.SHOPIFY_SCOPES || 'read_discounts,write_discounts,read_orders,write_orders,read_products,write_products,read_script_tags,write_script_tags,read_themes,write_themes';
-const APP_URL = process.env.APP_URL || 'https://commerce-shield.onrender.com';
-
-// Cloudflare API — used to write the access token into the worker secret after OAuth
-const CF_API_TOKEN = process.env.CF_API_TOKEN || '';
-const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID || '';
-const CF_WORKER_NAME = process.env.CF_WORKER_NAME || 'commerce-shield-prod';
 const PIXEL_GUARD_TTL_MS = parseInt(process.env.PIXEL_GUARD_TTL_MS || String(24 * 60 * 60 * 1000), 10);
 const PIXEL_GUARD_MAX_ENTRIES = 16;
+
+const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || 'dc386b789af148f54d80b54d07e63215';
+const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
+const SHOPIFY_SCOPES = 'read_discounts,write_discounts,read_orders,write_orders,read_products,write_products,read_script_tags,write_script_tags,read_themes,write_themes';
+const SHOPIFY_APP_URL = (process.env.SHOPIFY_APP_URL || 'https://commerce-shield.onrender.com').replace(/\/$/, '');
+const OAUTH_REDIRECT_URI = `${SHOPIFY_APP_URL}/auth/callback`;
+const OAUTH_NONCE_TTL_MS = 10 * 60 * 1000;
+const oauthNonces = new Map();
 
 const LOG_LEVEL = (process.env.LOG_LEVEL || 'info').toLowerCase();
 const LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
@@ -27,6 +24,28 @@ function log(level, message) {
 }
 
 const app = express();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [nonce, entry] of oauthNonces.entries()) {
+    if (now - entry.ts > OAUTH_NONCE_TTL_MS) oauthNonces.delete(nonce);
+  }
+}, 60_000).unref();
+
+function normalizeShopDomain(value) {
+  const candidate = String(value || '').trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(candidate) ? candidate : '';
+}
+
+function buildEmbeddedLaunchPath(shop, host) {
+  const params = new URLSearchParams({ shop, embedded: '1' });
+  if (host) params.set('host', host);
+  return `/app?${params.toString()}`;
+}
+
+function buildShopifyAdminLaunchUrl(shop) {
+  return `https://${shop}/admin/apps/${SHOPIFY_API_KEY}`;
+}
 
 // Security headers
 app.use((_req, res, next) => {
@@ -39,8 +58,97 @@ app.use((_req, res, next) => {
   next();
 });
 
+// Parse JSON bodies (for signer and other API endpoints)
+app.use(express.json({ limit: '10mb' }));
+
 // Serve static admin UI (built by scripts/gen-ui.cjs from worker/src/index.js)
 app.use(express.static('public'));
+
+app.get('/auth', (req, res) => {
+  const shop = normalizeShopDomain(req.query.shop);
+  const host = String(req.query.host || '');
+  if (!shop) return res.status(400).send('Missing or invalid shop parameter');
+
+  if (!SHOPIFY_API_SECRET) {
+    // Fail open to embedded app shell when secret is not configured.
+    const launch = buildEmbeddedLaunchPath(shop, host);
+    return res.redirect(302, launch);
+  }
+
+  const nonce = crypto.randomBytes(16).toString('hex');
+  oauthNonces.set(nonce, { shop, ts: Date.now() });
+
+  const authUrl = new URL(`https://${shop}/admin/oauth/authorize`);
+  authUrl.searchParams.set('client_id', SHOPIFY_API_KEY);
+  authUrl.searchParams.set('scope', SHOPIFY_SCOPES);
+  authUrl.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
+  authUrl.searchParams.set('state', nonce);
+  if (host) authUrl.searchParams.set('host', host);
+  return res.redirect(302, authUrl.toString());
+});
+
+app.get('/auth/callback', async (req, res) => {
+  const shop = normalizeShopDomain(req.query.shop);
+  const code = String(req.query.code || '');
+  const state = String(req.query.state || '');
+  const hmac = String(req.query.hmac || '');
+  const host = String(req.query.host || '');
+
+  if (!shop || !code || !state || !hmac) {
+    return res.status(400).send('Missing OAuth callback parameters');
+  }
+
+  const nonceEntry = oauthNonces.get(state);
+  oauthNonces.delete(state);
+  if (!nonceEntry || nonceEntry.shop !== shop) {
+    return res.status(403).send('Invalid OAuth state');
+  }
+
+  const params = Object.keys(req.query)
+    .filter((k) => k !== 'hmac' && req.query[k] != null)
+    .sort()
+    .map((k) => `${k}=${Array.isArray(req.query[k]) ? req.query[k][0] : req.query[k]}`)
+    .join('&');
+
+  const expected = crypto.createHmac('sha256', SHOPIFY_API_SECRET).update(params).digest('hex');
+  const actual = hmac.toLowerCase();
+  if (expected.length !== actual.length || !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual))) {
+    return res.status(403).send('HMAC validation failed');
+  }
+
+  try {
+    const tokenRes = await fetch(`https://${shop}/admin/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: SHOPIFY_API_KEY,
+        client_secret: SHOPIFY_API_SECRET,
+        code,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      const body = await tokenRes.text();
+      log('error', 'OAuth token exchange failed', { shop, status: tokenRes.status, body: body.slice(0, 300) });
+      return res.status(500).send('Token exchange failed');
+    }
+
+    const tokenPayload = await tokenRes.json();
+    if (tokenPayload && tokenPayload.access_token) {
+      log('info', 'Shopify OAuth exchange completed', { shop, scope: tokenPayload.scope || '' });
+    }
+  } catch (error) {
+    log('error', 'OAuth callback exception', { shop, message: error.message });
+    return res.status(500).send('OAuth callback failed');
+  }
+
+  if (host) {
+    return res.redirect(302, buildEmbeddedLaunchPath(shop, host));
+  }
+  return res.redirect(302, buildShopifyAdminLaunchUrl(shop));
+});
+
+app.get('/app', (req, res) => res.sendFile('index.html', { root: 'public' }));
 
 // ---------------------------------------------------------------------------
 // Pixel-guard caching proxy
@@ -105,145 +213,105 @@ app.get('/cs-pixel-guard.js', async (req, res) => {
   }
 });
 
+function applyTurnstileCors(req, res) {
+  const origin = typeof req.headers.origin === 'string' ? req.headers.origin : '';
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cache-Control', 'no-store');
+}
+
+app.options('/api/turnstile-verify', (req, res) => {
+  applyTurnstileCors(req, res);
+  return res.status(204).end();
+});
+
+app.post('/api/turnstile-verify', async (req, res) => {
+  applyTurnstileCors(req, res);
+
+  const token = typeof req.body?.token === 'string' ? req.body.token.slice(0, 2048) : '';
+  const action = typeof req.body?.action === 'string' ? req.body.action.slice(0, 50) : '';
+
+  if (!token) {
+    return res.status(400).json({ ok: false, error: 'missing_token' });
+  }
+
+  try {
+    const upstream = await fetch(`${WORKER_ORIGIN}/api/turnstile-verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'commerce-shield-render-proxy/1.0',
+      },
+      body: JSON.stringify({ token, action }),
+    });
+
+    const bodyText = await upstream.text();
+    let jsonBody;
+    try {
+      jsonBody = JSON.parse(bodyText);
+    } catch {
+      jsonBody = { ok: false, error: 'invalid_upstream_response' };
+    }
+
+    return res.status(upstream.status).json(jsonBody);
+  } catch (err) {
+    // Fail open on upstream transport errors to avoid login friction for humans.
+    log('warn', `turnstile proxy upstream error: ${err.message}`);
+    return res.status(200).json({ ok: true, note: 'upstream_error' });
+  }
+});
+
 // Health check
 app.get('/api/health', (_req, res) => res.json({ ok: true, timestamp: new Date().toISOString() }));
 
-// ---------------------------------------------------------------------------
-// Shopify OAuth
-// In-memory nonce store: nonce -> expiresAt (10 min TTL)
-// ---------------------------------------------------------------------------
-const oauthNonces = new Map();
-const NONCE_TTL_MS = 10 * 60 * 1000;
-
-function generateNonce() {
-  return crypto.randomBytes(16).toString('hex');
-}
-
-function cleanNonces() {
-  const now = Date.now();
-  for (const [nonce, exp] of oauthNonces) {
-    if (now > exp) oauthNonces.delete(nonce);
-  }
-}
-
-function validateShopDomain(shop) {
-  return typeof shop === 'string' && /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop);
-}
-
-function validateShopifyHmac(query) {
-  const params = Object.assign({}, query);
-  const hmac = params.hmac;
-  delete params.hmac;
-  const message = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
-  const expected = crypto.createHmac('sha256', SHOPIFY_API_SECRET).update(message).digest('hex');
-  // Both are hex SHA-256 = 64 chars; timingSafeEqual requires equal length
-  if (!hmac || hmac.length !== expected.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(hmac, 'utf8'), Buffer.from(expected, 'utf8'));
-}
-
-async function updateWorkerSecret(name, value) {
-  if (!CF_API_TOKEN || !CF_ACCOUNT_ID) {
-    log('warn', `CF credentials not set — cannot update worker secret ${name}`);
-    return;
-  }
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/workers/scripts/${CF_WORKER_NAME}/secrets`;
-  const r = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${CF_API_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name, text: value, type: 'secret_text' }),
-  });
-  if (!r.ok) {
-    const text = await r.text().catch(() => '');
-    throw new Error(`CF secret update failed (${name}): ${r.status} ${text.slice(0, 200)}`);
-  }
-}
-
-// Step 1: Initiate OAuth — redirect merchant to Shopify
-app.get('/auth', (req, res) => {
-  const shop = (typeof req.query.shop === 'string' ? req.query.shop : '').toLowerCase().trim();
-  if (!validateShopDomain(shop)) {
-    return res.status(400).send('Invalid or missing shop parameter.');
-  }
-  cleanNonces();
-  const nonce = generateNonce();
-  oauthNonces.set(nonce, Date.now() + NONCE_TTL_MS);
-  const redirectUri = `${APP_URL}/auth/callback`;
-  const authUrl = `https://${shop}/admin/oauth/authorize` +
-    `?client_id=${encodeURIComponent(SHOPIFY_API_KEY)}` +
-    `&scope=${encodeURIComponent(SHOPIFY_SCOPES)}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&state=${nonce}`;
-  log('info', `OAuth initiated for ${shop}`);
-  res.redirect(authUrl);
-});
-
-// Step 2: Handle Shopify callback, exchange code for access token
-app.get('/auth/callback', async (req, res) => {
-  const shop = (typeof req.query.shop === 'string' ? req.query.shop : '').toLowerCase().trim();
-  const { code, state, hmac } = req.query;
-
-  if (!validateShopDomain(shop)) return res.status(400).send('Invalid shop.');
-  if (!hmac || !code || !state) return res.status(400).send('Missing required OAuth parameters.');
-
-  // Validate Shopify HMAC signature
-  if (!validateShopifyHmac(req.query)) {
-    log('warn', `OAuth HMAC validation failed for ${shop}`);
-    return res.status(403).send('Request validation failed.');
-  }
-
-  // Validate and consume nonce
-  cleanNonces();
-  if (!oauthNonces.has(state)) {
-    return res.status(403).send('Invalid or expired state token. Please try again.');
-  }
-  oauthNonces.delete(state);
-
-  // Exchange code for access token
-  let accessToken;
+// GTM Signer: edge bot events
+app.post('/api/integrations/edge-bot-event', async (req, res) => {
   try {
-    const tokenRes = await fetch(`https://${shop}/admin/oauth/access_token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_id: SHOPIFY_API_KEY,
-        client_secret: SHOPIFY_API_SECRET,
-        code,
-      }),
-    });
-    if (!tokenRes.ok) {
-      const text = await tokenRes.text().catch(() => '');
-      throw new Error(`Token exchange failed: ${tokenRes.status} ${text.slice(0, 200)}`);
+    const secret = process.env.EDGE_BOT_SHARED_SECRET;
+    if (!secret) {
+      return res.status(503).json({ error: 'Signer not configured: EDGE_BOT_SHARED_SECRET is missing' });
     }
-    const data = await tokenRes.json();
-    accessToken = data.access_token;
-    if (!accessToken) throw new Error('No access_token in Shopify response');
-  } catch (err) {
-    log('error', `OAuth token exchange failed for ${shop}: ${err.message}`);
-    return res.status(500).send('OAuth failed. Please try installing the app again.');
-  }
 
-  // Write token into the live Cloudflare worker secrets
-  try {
-    const tokenMap = JSON.stringify({ [shop]: accessToken });
-    await Promise.all([
-      updateWorkerSecret('SHOPIFY_ADMIN_ACCESS_TOKENS_JSON', tokenMap),
-      updateWorkerSecret('SHOPIFY_ADMIN_ACCESS_TOKEN', accessToken),
-    ]);
-    log('info', `OAuth complete for ${shop} — worker secrets updated`);
-  } catch (err) {
-    // Non-fatal: token exchange succeeded, secret update failed
-    log('error', `Worker secret update failed for ${shop}: ${err.message}`);
-  }
+    const bodyString = JSON.stringify(req.body);
+    const timestamp = Date.now().toString();
+    const nonce = crypto.randomBytes(16).toString('hex');
+    
+    // Create HMAC signature: sha256(timestamp.nonce.body) with base64 secret
+    const message = `${timestamp}.${nonce}.${bodyString}`;
+    const signature = crypto
+      .createHmac('sha256', Buffer.from(secret, 'base64'))
+      .update(message)
+      .digest('hex');
 
-  // Redirect into the embedded admin
-  res.redirect(`https://${shop}/admin/apps/${SHOPIFY_API_KEY}`);
+    // Forward to Worker with signed headers
+    const workerUrl = `${WORKER_ORIGIN}/api/integrations/edge-bot-event`;
+    const response = await fetch(workerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CS-Timestamp': timestamp,
+        'X-CS-Nonce': nonce,
+        'X-CS-Signature': signature,
+      },
+      body: bodyString,
+    });
+
+    const responseBody = await response.text();
+    let responseJson;
+    try {
+      responseJson = JSON.parse(responseBody);
+    } catch (e) {
+      responseJson = { body: responseBody };
+    }
+
+    res.status(response.status).json(responseJson);
+  } catch (err) {
+    log('error', `Signer error: ${err.message}`);
+    res.status(500).json({ error: 'Signer service error', details: err.message });
+  }
 });
-
-// Explicit static file routes (belt-and-suspenders alongside express.static)
-app.get('/commerce-shield-report.html', (_req, res) => res.sendFile('commerce-shield-report.html', { root: 'public' }));
 
 // Catch-all -> index.html
 app.get('*', (_req, res) => res.sendFile('index.html', { root: 'public' }));

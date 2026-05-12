@@ -5,18 +5,18 @@ name = "Commerce Shield"
 application_url = "https://commerce-shield-prod.ncassidy.workers.dev/"
 embedded = true
 
+[build]
+dev_store_url = "gerberchildrenswear.myshopify.com"
+
 [webhooks]
 api_version = "2025-10"
 
 [access_scopes]
-# Keep these aligned with server.js SHOPIFY_SCOPES used by the OAuth route.
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_script_tags,write_script_tags,read_themes,write_themes"
 
 [auth]
 redirect_urls = [
-	"https://commerce-shield-prod.ncassidy.workers.dev/auth/callback",
-	"https://commerce-shield-prod.ncassidy.workers.dev/auth/callback/"
+  "https://commerce-shield-prod.ncassidy.workers.dev/auth/callback",
+  "https://commerce-shield-prod.ncassidy.workers.dev/auth/callback/"
 ]
-
-[build]
-dev_store_url = "gerberchildrenswear.myshopify.com"

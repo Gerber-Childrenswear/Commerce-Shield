@@ -95,6 +95,12 @@ export default {
       if (url.pathname === "/cs-pixel-guard.js" && request.method === "GET") {
         return await servePixelGuard(url, env);
       }
+      if (url.pathname === "/auth" && request.method === "GET") {
+        return redirectToEmbeddedLaunch(url);
+      }
+      if (url.pathname === "/auth/callback" && request.method === "GET") {
+        return redirectToEmbeddedLaunch(url);
+      }
       if (url.pathname === "/" || url.pathname === "/app" || url.pathname.startsWith("/app/")) {
         return await serveEmbeddedAdmin(url, request, ctx);
       }
@@ -258,6 +264,21 @@ function requireWorkerAdmin(request, env) {
 function normalizeShopDomain(value) {
   const candidate = sanitizeString(value, 120).toLowerCase();
   return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(candidate) ? candidate : "";
+}
+
+function buildEmbeddedLaunchPath(shop, host) {
+  const params = new URLSearchParams();
+  params.set("embedded", "1");
+  if (shop) params.set("shop", shop);
+  if (host) params.set("host", host);
+  return `/app?${params.toString()}`;
+}
+
+function redirectToEmbeddedLaunch(url) {
+  const shop = normalizeShopDomain(url.searchParams.get("shop"));
+  const host = sanitizeString(url.searchParams.get("host"), 500);
+  const launchPath = buildEmbeddedLaunchPath(shop, host);
+  return Response.redirect(new URL(launchPath, url.origin).toString(), 302);
 }
 
 function sanitizeEmailHash(value) {

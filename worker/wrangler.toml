@@ -21,6 +21,8 @@ persist = true
 SHOPIFY_APP_URL = "https://commerce-shield-prod.ncassidy.workers.dev"
 SHOPIFY_ADMIN_SHOP = "gerberchildrenswear.myshopify.com"
 SHOPIFY_ADMIN_API_VERSION = "2026-01"
+CLOUDFLARE_MONTHLY_REQUEST_QUOTA = "10000000"
+CLOUDFLARE_QUOTA_SHUTOFF_PERCENT = "95"
 
 [[d1_databases]]
 binding = "DB"

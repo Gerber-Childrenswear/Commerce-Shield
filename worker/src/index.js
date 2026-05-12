@@ -63,6 +63,21 @@ export default {
     const sensitiveRoute = isSensitiveRoute(url.pathname);
     const corsHeaders = buildCorsHeaders(request, env, sensitiveRoute);
 
+    const quotaState = await trackMonthlyQuotaUsage(env);
+    if (url.pathname === "/api/system/quota" && request.method === "GET") {
+      return jsonResponse({
+        ok: true,
+        quota: quotaState || {
+          enabled: false,
+          reason: "CLOUDFLARE_MONTHLY_REQUEST_QUOTA is not configured",
+        },
+      }, 200, corsHeaders);
+    }
+
+    if (quotaState?.tripped) {
+      return quotaShutdownResponse(quotaState, corsHeaders);
+    }
+
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
@@ -140,6 +155,117 @@ function jsonResponseWithHeaders(body, status, corsHeaders, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", ...corsHeaders, ...extraHeaders },
+  });
+}
+
+function parsePositiveInteger(value, fallback = 0) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.floor(parsed);
+}
+
+function resolveMonthlyQuotaConfig(env) {
+  const monthlyQuotaLimit = parsePositiveInteger(
+    env.CLOUDFLARE_MONTHLY_REQUEST_QUOTA
+      || env.WORKER_MONTHLY_REQUEST_QUOTA
+      || env.CF_MONTHLY_REQUEST_QUOTA,
+    0,
+  );
+
+  if (!monthlyQuotaLimit) return null;
+
+  const shutoffPercentRaw = Number(
+    env.CLOUDFLARE_QUOTA_SHUTOFF_PERCENT
+      || env.WORKER_QUOTA_SHUTOFF_PERCENT
+      || 95,
+  );
+
+  const shutoffPercent = Number.isFinite(shutoffPercentRaw)
+    ? Math.min(100, Math.max(1, shutoffPercentRaw))
+    : 95;
+
+  const shutoffThreshold = Math.max(1, Math.ceil(monthlyQuotaLimit * (shutoffPercent / 100)));
+
+  return {
+    monthlyQuotaLimit,
+    shutoffPercent,
+    shutoffThreshold,
+  };
+}
+
+function buildMonthlyQuotaWindow(now = new Date()) {
+  const year = now.getUTCFullYear();
+  const monthIndex = now.getUTCMonth();
+  const month = String(monthIndex + 1).padStart(2, "0");
+  const nextMonthStart = new Date(Date.UTC(year, monthIndex + 1, 1, 0, 0, 0));
+
+  return {
+    monthKey: `${year}-${month}`,
+    expiresAt: nextMonthStart.toISOString(),
+  };
+}
+
+function secondsUntilIso(isoDate) {
+  const target = Date.parse(isoDate);
+  if (!Number.isFinite(target)) return 3600;
+  return Math.max(60, Math.ceil((target - Date.now()) / 1000));
+}
+
+async function trackMonthlyQuotaUsage(env) {
+  const config = resolveMonthlyQuotaConfig(env);
+  if (!config) return null;
+
+  const { monthKey, expiresAt } = buildMonthlyQuotaWindow();
+  const bucketKey = `worker_quota:${monthKey}`;
+
+  await env.DB.prepare(
+    `INSERT INTO rate_limits (bucket_key, count, expires_at)
+     VALUES (?, 1, ?)
+     ON CONFLICT(bucket_key) DO UPDATE SET
+       count = count + 1,
+       expires_at = excluded.expires_at`
+  ).bind(bucketKey, expiresAt).run();
+
+  const row = await env.DB.prepare(
+    `SELECT count
+     FROM rate_limits
+     WHERE bucket_key = ?
+     LIMIT 1`
+  ).bind(bucketKey).first();
+
+  const requestCount = Number(row?.count) || 0;
+  const tripped = requestCount >= config.shutoffThreshold;
+
+  return {
+    enabled: true,
+    month: monthKey,
+    requestCount,
+    monthlyQuotaLimit: config.monthlyQuotaLimit,
+    shutoffPercent: config.shutoffPercent,
+    shutoffThreshold: config.shutoffThreshold,
+    remainingBeforeLimit: Math.max(0, config.monthlyQuotaLimit - requestCount),
+    tripped,
+    resetAtUtc: expiresAt,
+  };
+}
+
+function quotaShutdownResponse(quotaState, corsHeaders) {
+  return new Response(JSON.stringify({
+    ok: false,
+    error: "monthly_quota_guard_engaged",
+    message: "Commerce Shield is temporarily shut off to protect your Cloudflare monthly quota.",
+    quota: quotaState,
+  }), {
+    status: 503,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "Retry-After": String(secondsUntilIso(quotaState.resetAtUtc)),
+      "X-CS-Quota-Guard": "tripped",
+      "X-CS-Quota-Usage": String(quotaState.requestCount),
+      "X-CS-Quota-Limit": String(quotaState.monthlyQuotaLimit),
+      ...corsHeaders,
+    },
   });
 }
 
@@ -839,7 +965,25 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
   const incomingConfidence = sanitizeString(body.confidence, 20).toLowerCase() || "low";
   const incomingIsBot = body.isBot === true;
   const hardUa = looksLikeHardBotUserAgent(ua);
-  const cfRisk = applyCloudflareRiskSignals(request, incomingScore, incomingIsBot, incomingConfidence);
+  const isGtmServerSource = source === "gtm-server";
+  const cfRisk = isGtmServerSource
+    ? {
+      score: incomingScore,
+      isBot: incomingIsBot,
+      confidence: incomingConfidence === "high" ? "high" : "low",
+      reasons: ["cf_risk_skipped_gtm_server"],
+      cfThreatScore: null,
+      cfAsn: null,
+      cfAsOrganization: null,
+    }
+    : applyCloudflareRiskSignals(request, incomingScore, incomingIsBot, incomingConfidence);
+
+  // Server-side GTM calls originate from datacenter infrastructure.
+  // Do not classify as bot unless payload itself carries explicit bot evidence.
+  if (isGtmServerSource && !hardUa && !incomingIsBot && incomingScore < botProtectionThreshold) {
+    console.log("edge_bot_event:gtm_server_no_signal");
+    return jsonResponse({ ok: true, accepted: false, reason: "gtm_server_no_signal" }, 200, corsHeaders);
+  }
 
   let finalBotScore = Math.max(incomingScore, cfRisk.score, hardUa ? 0.95 : 0);
   finalBotScore = Number(Math.min(1, finalBotScore).toFixed(2));

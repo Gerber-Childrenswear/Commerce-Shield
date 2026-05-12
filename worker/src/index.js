@@ -50,6 +50,28 @@ const DEFAULT_ADMIN_SETTINGS = Object.freeze({
   },
 });
 
+// Sources that must never write to D1 or appear in dashboards (e.g. server-side GTM noise).
+// Override via BLOCKED_EVENT_SOURCES env var (comma-separated list).
+const DEFAULT_BLOCKED_EVENT_SOURCES = ["gtm-server"];
+
+function parseBlockedEventSources(env) {
+  const raw = sanitizeString(env?.BLOCKED_EVENT_SOURCES, 500);
+  if (!raw) return new Set(DEFAULT_BLOCKED_EVENT_SOURCES);
+  const list = raw
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  return new Set(list.length ? list : DEFAULT_BLOCKED_EVENT_SOURCES);
+}
+
+function isBlockedEventSource(env, source) {
+  if (!source) return false;
+  const normalized = String(source).trim().toLowerCase();
+  if (!normalized) return false;
+  const blocked = parseBlockedEventSources(env);
+  return blocked.has(normalized);
+}
+
 class HttpError extends Error {
   constructor(message, status = 400) {
     super(message);
@@ -1077,6 +1099,15 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
 
   const { rawText, body } = await parseJsonRequest(request, 8 * 1024);
   console.log("edge_bot_event:parsed_json");
+
+  // Fast-path reject for denylisted sources (e.g. gtm-server). Returns BEFORE
+  // signature verification and nonce write so the request consumes minimal D1 work.
+  const rawSource = sanitizeString(body.source, 80);
+  if (isBlockedEventSource(env, rawSource)) {
+    console.log("edge_bot_event:blocked_source", sanitizeString(rawSource, 80));
+    return jsonResponse({ ok: true, accepted: false, reason: "blocked_source" }, 200, corsHeaders);
+  }
+
   await verifySignedRequestWithSecret(
     request,
     env,
@@ -1417,9 +1448,12 @@ async function handleDashboardData(request, url, env, corsHeaders, ctx) {
      FROM daily_stats WHERE shop = ? AND date >= ?`
   ).bind(shop, sinceStr).first();
 
+  // Defensive UI filter: never surface denylisted sources (e.g. gtm-server) in dashboards.
   const sources = await env.DB.prepare(
     `SELECT source, COUNT(*) as count, SUM(is_bot) as bots
      FROM visits WHERE shop = ? AND created_at >= datetime(?)
+       AND source IS NOT NULL
+       AND LOWER(source) NOT LIKE 'gtm-server%'
      GROUP BY source ORDER BY count DESC LIMIT 10`
   ).bind(shop, sinceStr + "T00:00:00").all();
 
@@ -1458,12 +1492,17 @@ async function handleRecentVisits(request, url, env, corsHeaders, ctx) {
 
   const cacheKey = buildReadCacheKey("/api/recent", shop, { limit, bots: botsOnly ? 1 : 0 });
   return respondWithEdgeCache(cacheKey, 20, corsHeaders, ctx, async () => {
+    // Defensive UI filter: hide denylisted sources from Recent Visits.
     const recent = await env.DB.prepare(
       botsOnly
         ? `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
-           FROM visits WHERE shop = ? AND is_bot = 1 ORDER BY id DESC LIMIT ?`
+           FROM visits WHERE shop = ? AND is_bot = 1
+             AND (source IS NULL OR LOWER(source) NOT LIKE 'gtm-server%')
+           ORDER BY id DESC LIMIT ?`
         : `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
-           FROM visits WHERE shop = ? ORDER BY id DESC LIMIT ?`
+           FROM visits WHERE shop = ?
+             AND (source IS NULL OR LOWER(source) NOT LIKE 'gtm-server%')
+           ORDER BY id DESC LIMIT ?`
     ).bind(shop, limit).all();
 
     return jsonResponseWithHeaders({ visits: recent.results || [] }, 200, corsHeaders, {

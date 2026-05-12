@@ -1,4 +1,3 @@
-import { scoreIntentProfile } from "../../shared/intent-scoring.js";
 import { createHmacSignature, parseAllowedOrigins, timingSafeEqualHex } from "../../shared/worker-security.js";
 
 /**
@@ -18,21 +17,14 @@ const SENSITIVE_CORS_HEADERS = {
 };
 
 const MAX_JSON_BODY_BYTES = 16 * 1024;
-const INTENT_EVENT_LIMIT = 120;
-const BLOOMREACH_LOOKUP_LIMIT = 30;
 const EDGE_BOT_EVENT_LIMIT = 6000;
 const PIXEL_GUARD_EVENT_LIMIT = 240;
 const DASHBOARD_READ_LIMIT = 60;
 const RECENT_READ_LIMIT = 60;
 const NONCE_WINDOW_SECONDS = 300;
 const SHOPIFY_ADMIN_API_VERSION_FALLBACK = "2026-01";
-const SHOPIFY_INTENT_NAMESPACE = "$app";
-const SHOPIFY_INTENT_MODEL_VERSION = "intent-v1";
-const SHOPIFY_AUDIT_REQUIRED_SCOPES = ["read_themes", "read_script_tags"];
 const SHOPIFY_THEME_INSTALL_REQUIRED_SCOPES = ["read_themes", "write_themes"];
 const PIXEL_GUARD_MARKER = "Commerce Shield Pixel Guard";
-const INTENT_HIGH_TIERS = new Set(["high_intent", "purchase_ready", "customer"]);
-const INTENT_MEDIUM_TIERS = new Set(["considering", "interested"]);
 const DEFAULT_HUMAN_VISIT_SAMPLE_RATE = 0.05;
 const DEFAULT_SUSPICIOUS_VISIT_THRESHOLD = 0.35;
 const DATACENTER_ASNS = new Set([
@@ -53,59 +45,10 @@ const KNOWN_BAD_JA3 = new Set([
 ]);
 const DEFAULT_ADMIN_SETTINGS = Object.freeze({
   intent: {
-    sensitivity: 62,
     botProtectionEnabled: true,
     botProtectionIntensity: 5,
-    includePaths: ["/products/*", "/collections/*", "/cart", "/checkout"],
-    rewardProductViews: true,
-    rewardCartSignals: true,
-    rewardReturningSessions: true,
-    suppressBotsAndCrawlers: true,
-    conservativeMode: true,
-  },
-  appHealth: {
-    detectLegacyScriptTags: true,
-    requireThemeAppExtensions: true,
-    detectDuplicatePixels: true,
-    reviewInlineScripts: true,
-    conservativeFlagging: true,
-  },
-  conversionMri: {
-    conservativeMode: true,
-    runAppChecks: true,
-    runContentChecks: true,
-    runAdaChecks: true,
-    runSeoChecks: true,
-    runSpeedChecks: true,
   },
 });
-
-const ALLOWED_INTENT_EVENTS = new Set([
-  "page_view",
-  "collection_view",
-  "search",
-  "search_click",
-  "filter_use",
-  "sort_use",
-  "product_view",
-  "variant_select",
-  "media_interaction",
-  "size_guide_open",
-  "review_open",
-  "scroll_depth_50",
-  "scroll_depth_80",
-  "engaged_30s",
-  "engaged_120s",
-  "add_to_cart",
-  "cart_view",
-  "cart_update",
-  "checkout_start",
-  "email_capture",
-  "login",
-  "purchase",
-  "session_summary",
-  "discount_view",
-]);
 
 class HttpError extends Error {
   constructor(message, status = 400) {
@@ -143,12 +86,6 @@ export default {
       if (url.pathname === "/api/admin/install-pixel-guard" && request.method === "POST") {
         return await handleAdminInstallPixelGuard(request, url, env, corsHeaders);
       }
-      if (url.pathname === "/api/intent/event" && request.method === "POST") {
-        return await handleIntentEvent(request, env, corsHeaders, ctx);
-      }
-      if (url.pathname === "/api/integrations/bloomreach/intent-profile" && request.method === "POST") {
-        return await handleBloomreachIntentProfile(request, env, corsHeaders, ctx);
-      }
       if (url.pathname === "/api/integrations/edge-bot-event" && request.method === "POST") {
         return await handleEdgeBotEvent(request, env, corsHeaders, ctx);
       }
@@ -175,7 +112,7 @@ export default {
 };
 
 function isSensitiveRoute(pathname) {
-  return pathname === "/api/integrations/bloomreach/intent-profile" || pathname === "/api/integrations/edge-bot-event" || pathname.startsWith("/api/admin/");
+  return pathname === "/api/integrations/edge-bot-event" || pathname.startsWith("/api/admin/");
 }
 
 function buildCorsHeaders(request, env, sensitiveRoute) {
@@ -282,6 +219,15 @@ function sanitizeString(value, maxLength = 255) {
   return value.trim().slice(0, maxLength);
 }
 
+function safeJsonParse(value, fallback) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
 function timingSafeEqualString(left, right) {
   if (typeof left !== "string" || typeof right !== "string") return false;
   if (left.length !== right.length) return false;
@@ -363,21 +309,6 @@ function parseShopifyAdminTokenMap(env) {
   return tokens;
 }
 
-function buildIntentSyncPayload(payload, scoredProfile) {
-  return {
-    shop: payload.shop,
-    customerId: payload.customerId,
-    visitorKey: payload.visitorKey,
-    emailHash: payload.emailHash || null,
-    intentScore: scoredProfile.intentScore,
-    intentTier: scoredProfile.intentTier,
-    intentConfidence: scoredProfile.intentConfidence,
-    intentUpdatedAt: scoredProfile.lastSeenAt || payload.createdAt,
-    intentModelVersion: SHOPIFY_INTENT_MODEL_VERSION,
-    sourceEventType: payload.eventType,
-  };
-}
-
 function cloneDefaultAdminSettings() {
   return JSON.parse(JSON.stringify(DEFAULT_ADMIN_SETTINGS));
 }
@@ -406,68 +337,22 @@ function botProtectionThresholdFromIntensity(intensity) {
   return Number((0.95 - ((safeIntensity - 1) * 0.02)).toFixed(2));
 }
 
-function normalizePathPatterns(value) {
-  const rawValues = Array.isArray(value)
-    ? value
-    : typeof value === "string"
-      ? value.split(/\r?\n|,/g)
-      : [];
-
-  const deduped = [];
-  const seen = new Set();
-  for (const rawValue of rawValues) {
-    const candidate = sanitizeString(rawValue, 160);
-    if (!candidate) continue;
-    const normalized = candidate.startsWith("/") ? candidate : `/${candidate.replace(/^\/+/, "")}`;
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    deduped.push(normalized);
-    if (deduped.length >= 20) break;
-  }
-
-  return deduped.length > 0 ? deduped : cloneDefaultAdminSettings().intent.includePaths;
-}
-
 function normalizeAdminSettings(input) {
   const defaults = cloneDefaultAdminSettings();
   const source = input && typeof input === "object" ? input : {};
   const intent = source.intent && typeof source.intent === "object" ? source.intent : {};
-  const appHealth = source.appHealth && typeof source.appHealth === "object" ? source.appHealth : {};
-  const conversionMri = source.conversionMri && typeof source.conversionMri === "object" ? source.conversionMri : {};
 
   return {
     intent: {
-      sensitivity: clampNumber(intent.sensitivity, defaults.intent.sensitivity, 10, 95),
       botProtectionEnabled: coerceBoolean(intent.botProtectionEnabled, defaults.intent.botProtectionEnabled),
       botProtectionIntensity: clampNumber(intent.botProtectionIntensity, defaults.intent.botProtectionIntensity, 1, 10),
-      includePaths: normalizePathPatterns(intent.includePaths ?? defaults.intent.includePaths),
-      rewardProductViews: coerceBoolean(intent.rewardProductViews, defaults.intent.rewardProductViews),
-      rewardCartSignals: coerceBoolean(intent.rewardCartSignals, defaults.intent.rewardCartSignals),
-      rewardReturningSessions: coerceBoolean(intent.rewardReturningSessions, defaults.intent.rewardReturningSessions),
-      suppressBotsAndCrawlers: coerceBoolean(intent.suppressBotsAndCrawlers, defaults.intent.suppressBotsAndCrawlers),
-      conservativeMode: coerceBoolean(intent.conservativeMode, defaults.intent.conservativeMode),
-    },
-    appHealth: {
-      detectLegacyScriptTags: coerceBoolean(appHealth.detectLegacyScriptTags, defaults.appHealth.detectLegacyScriptTags),
-      requireThemeAppExtensions: coerceBoolean(appHealth.requireThemeAppExtensions, defaults.appHealth.requireThemeAppExtensions),
-      detectDuplicatePixels: coerceBoolean(appHealth.detectDuplicatePixels, defaults.appHealth.detectDuplicatePixels),
-      reviewInlineScripts: coerceBoolean(appHealth.reviewInlineScripts, defaults.appHealth.reviewInlineScripts),
-      conservativeFlagging: coerceBoolean(appHealth.conservativeFlagging, defaults.appHealth.conservativeFlagging),
-    },
-    conversionMri: {
-      conservativeMode: coerceBoolean(conversionMri.conservativeMode, defaults.conversionMri.conservativeMode),
-      runAppChecks: coerceBoolean(conversionMri.runAppChecks, defaults.conversionMri.runAppChecks),
-      runContentChecks: coerceBoolean(conversionMri.runContentChecks, defaults.conversionMri.runContentChecks),
-      runAdaChecks: coerceBoolean(conversionMri.runAdaChecks, defaults.conversionMri.runAdaChecks),
-      runSeoChecks: coerceBoolean(conversionMri.runSeoChecks, defaults.conversionMri.runSeoChecks),
-      runSpeedChecks: coerceBoolean(conversionMri.runSpeedChecks, defaults.conversionMri.runSpeedChecks),
     },
   };
 }
 
 async function getAdminSettings(env, shop) {
   const row = await env.DB.prepare(
-    `SELECT intent_settings, app_health_settings, conversion_mri_settings
+    `SELECT intent_settings
      FROM admin_shop_settings
      WHERE shop = ?
      LIMIT 1`
@@ -477,8 +362,6 @@ async function getAdminSettings(env, shop) {
 
   return normalizeAdminSettings({
     intent: safeJsonParse(row.intent_settings, {}),
-    appHealth: safeJsonParse(row.app_health_settings, {}),
-    conversionMri: safeJsonParse(row.conversion_mri_settings, {}),
   });
 }
 
@@ -486,8 +369,6 @@ async function saveAdminSettings(env, shop, partialSettings) {
   const current = await getAdminSettings(env, shop);
   const next = normalizeAdminSettings({
     intent: { ...current.intent, ...(partialSettings.intent || {}) },
-    appHealth: { ...current.appHealth, ...(partialSettings.appHealth || {}) },
-    conversionMri: { ...current.conversionMri, ...(partialSettings.conversionMri || {}) },
   });
 
   await env.DB.prepare(
@@ -502,8 +383,8 @@ async function saveAdminSettings(env, shop, partialSettings) {
   ).bind(
     shop,
     JSON.stringify(next.intent),
-    JSON.stringify(next.appHealth),
-    JSON.stringify(next.conversionMri),
+    JSON.stringify({}),
+    JSON.stringify({}),
   ).run();
 
   return next;
@@ -513,13 +394,6 @@ function getRequiredShop(url) {
   const shop = normalizeShopDomain(url.searchParams.get("shop"));
   if (!shop) throw new HttpError("Missing or invalid shop parameter", 400);
   return shop;
-}
-
-function summarizeIntentSensitivity(sensitivity) {
-  if (sensitivity >= 80) return "Very selective";
-  if (sensitivity >= 65) return "Balanced";
-  if (sensitivity >= 45) return "Broad";
-  return "Exploratory";
 }
 
 async function handleAdminSettings(request, url, env, corsHeaders) {
@@ -732,13 +606,8 @@ function normalizeThemeText(content) {
 }
 
 function buildPixelGuardThemeSnippet(shop, workerOrigin) {
-  // Serve via Render proxy to avoid blowing the workers.dev free request quota.
-  // Render caches the script in-memory and downstream browsers cache for 24h,
-  // so the worker is only hit once per ~24h per (shop, mode) variant.
-  // Bot event POSTs (rare) still go straight to the worker via the script's
-  // baked-in `apiBase`.
-  const PIXEL_GUARD_PROXY_HOST = "https://commerce-shield.onrender.com";
-  const scriptUrl = `${PIXEL_GUARD_PROXY_HOST}/cs-pixel-guard.js?shop=${encodeURIComponent(shop)}`;
+  const normalizedOrigin = sanitizeString(workerOrigin, 255).replace(/\/$/, "");
+  const scriptUrl = `${normalizedOrigin}/cs-pixel-guard.js?shop=${encodeURIComponent(shop)}`;
   return `  <!-- ${PIXEL_GUARD_MARKER} -->\n  <script src="${scriptUrl}"></script>\n`;
 }
 
@@ -809,52 +678,6 @@ async function installPixelGuardInTheme(env, shop, workerOrigin) {
     message: "Pixel guard installed at the beginning of layout/theme.liquid <head>.",
     theme: { id: mainTheme.id, name: mainTheme.name, role: mainTheme.role },
     filename,
-  };
-}
-
-function normalizeIntentEventPayload(body) {
-  const shop = normalizeShopDomain(body.shop);
-  const eventType = sanitizeString(body.eventType, 60);
-  const visitorKey = sanitizeString(body.visitorKey, 120);
-  const sessionId = sanitizeString(body.sessionId, 120);
-  const page = sanitizeString(body.page, 500);
-  const pageType = sanitizeString(body.pageType, 60);
-  const productId = sanitizeString(body.productId, 120);
-  const customerId = normalizeCustomerId(body.customerId);
-  const emailHash = sanitizeEmailHash(body.emailHash);
-  const metadata = typeof body.metadata === "object" && body.metadata ? body.metadata : {};
-  const createdAt = new Date().toISOString();
-  const botContext = {
-    isBot: Boolean(body.botContext?.isBot),
-    isLegitimate: Boolean(body.botContext?.isLegitimate),
-    botScore: Number(body.botContext?.botScore) || 0,
-    confidence: sanitizeString(body.botContext?.confidence || "low", 20).toLowerCase() || "low",
-  };
-
-  if (!shop) throw new HttpError("Missing shop", 400);
-  if (!visitorKey) throw new HttpError("Missing visitorKey", 400);
-  if (!ALLOWED_INTENT_EVENTS.has(eventType)) throw new HttpError("Unsupported event type", 400);
-
-  const sanitizedMetadata = {
-    durationMs: Number(metadata.durationMs) || 0,
-    pageViewCount: Number(metadata.pageViewCount) || 0,
-    commerceSignalCount: Number(metadata.commerceSignalCount) || 0,
-    queryLength: Number(metadata.queryLength) || 0,
-  };
-
-  return {
-    shop,
-    visitorKey,
-    sessionId,
-    eventType,
-    page,
-    pageType,
-    productId,
-    customerId,
-    emailHash,
-    metadata: sanitizedMetadata,
-    botContext,
-    createdAt,
   };
 }
 
@@ -1042,236 +865,6 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
     confidence: finalConfidence,
     intensity: botProtectionIntensity,
   }, 200, corsHeaders);
-}
-
-async function fetchIntentEvents(env, shop, visitorKey) {
-  const result = await env.DB.prepare(
-    `SELECT visitor_key, session_id, event_type, page_type, page, product_id, customer_id, email_hash, metadata, created_at
-     FROM intent_events
-     WHERE shop = ? AND visitor_key = ? AND created_at >= datetime('now', '-30 days')
-     ORDER BY created_at ASC`
-  ).bind(shop, visitorKey).all();
-
-  return (result.results || []).map((row) => ({
-    visitorKey: row.visitor_key,
-    sessionId: row.session_id,
-    eventType: row.event_type,
-    pageType: row.page_type,
-    page: row.page,
-    productId: row.product_id,
-    customerId: row.customer_id,
-    emailHash: row.email_hash,
-    metadata: safeJsonParse(row.metadata, {}),
-    createdAt: row.created_at,
-  }));
-}
-
-async function fetchIntentProfile(env, shop, visitorKey) {
-  return env.DB.prepare(
-    `SELECT visitor_key, customer_id, intent_score, intent_tier, intent_confidence, bot_excluded, bot_confidence, bot_score, updated_at
-     FROM intent_profiles
-     WHERE shop = ? AND visitor_key = ?
-     LIMIT 1`
-  ).bind(shop, visitorKey).first();
-}
-
-function safeJsonParse(value, fallback) {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-
-async function upsertIntentProfile(env, payload, scoredProfile) {
-  await env.DB.prepare(
-    `INSERT INTO intent_profiles (
-      shop, visitor_key, customer_id, email_hash, intent_score, intent_tier, intent_confidence,
-      bot_excluded, bot_confidence, bot_score, session_count, signal_summary,
-      first_seen_at, last_seen_at, purchased_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(shop, visitor_key) DO UPDATE SET
-      customer_id = COALESCE(excluded.customer_id, intent_profiles.customer_id),
-      email_hash = COALESCE(excluded.email_hash, intent_profiles.email_hash),
-      intent_score = excluded.intent_score,
-      intent_tier = excluded.intent_tier,
-      intent_confidence = excluded.intent_confidence,
-      bot_excluded = excluded.bot_excluded,
-      bot_confidence = excluded.bot_confidence,
-      bot_score = excluded.bot_score,
-      session_count = excluded.session_count,
-      signal_summary = excluded.signal_summary,
-      last_seen_at = excluded.last_seen_at,
-      purchased_at = COALESCE(excluded.purchased_at, intent_profiles.purchased_at),
-      updated_at = datetime('now')`
-  ).bind(
-    payload.shop,
-    payload.visitorKey,
-    payload.customerId || null,
-    payload.emailHash || null,
-    scoredProfile.intentScore,
-    scoredProfile.intentTier,
-    scoredProfile.intentConfidence,
-    scoredProfile.botContext.excluded ? 1 : 0,
-    scoredProfile.botContext.confidence,
-    scoredProfile.botContext.botScore,
-    scoredProfile.sessionCount,
-    JSON.stringify(scoredProfile.intentSignals),
-    scoredProfile.firstSeenAt || payload.createdAt,
-    scoredProfile.lastSeenAt || payload.createdAt,
-    scoredProfile.purchasedAt || null,
-  ).run();
-}
-
-function shouldSyncCustomerProfile(previousProfile, scoredProfile, payload) {
-  if (!payload.customerId) return false;
-  if (scoredProfile.botContext.excluded) return false;
-
-  const previousScore = Number(previousProfile?.intent_score) || 0;
-  const previousTier = previousProfile?.intent_tier || "";
-  const materialScoreChange = Math.abs(scoredProfile.intentScore - previousScore) >= 10;
-  const tierChanged = previousTier !== scoredProfile.intentTier;
-  const importantEvent = payload.eventType === "login" || payload.eventType === "email_capture" || payload.eventType === "purchase";
-
-  return !previousProfile || materialScoreChange || tierChanged || importantEvent;
-}
-
-async function syncIntentProfileToShopify(env, payload, scoredProfile, requestOrigin) {
-  let lastError = null;
-
-  try {
-    const syncedViaApp = await syncIntentProfileToShopifyApp(env, payload, scoredProfile, requestOrigin);
-    if (syncedViaApp) return;
-  } catch (error) {
-    lastError = error;
-  }
-
-  try {
-    const syncedDirectly = await syncIntentProfileToShopifyAdmin(env, payload, scoredProfile);
-    if (syncedDirectly) return;
-  } catch (error) {
-    lastError = lastError
-      ? new Error(`${lastError.message}; direct-sync fallback failed: ${error.message || error}`)
-      : error;
-  }
-
-  if (lastError) throw lastError;
-}
-
-async function syncIntentProfileToShopifyApp(env, payload, scoredProfile, requestOrigin) {
-  const configuredEndpoint = sanitizeString(env.SHOPIFY_INTENT_SYNC_URL, 500);
-  const appBaseUrl = sanitizeString(env.SHOPIFY_APP_URL, 500);
-  const secret = env.INTERNAL_SYNC_SHARED_SECRET;
-  if (!secret) return false;
-  const endpoint = configuredEndpoint || (appBaseUrl ? `${appBaseUrl.replace(/\/$/, "")}/api/intent/sync-customer` : "") || (requestOrigin ? `${requestOrigin.replace(/\/$/, "")}/api/intent/sync-customer` : "");
-  if (!endpoint) return false;
-
-  const syncPayload = buildIntentSyncPayload(payload, scoredProfile);
-
-  const bodyText = JSON.stringify(syncPayload);
-  const timestamp = String(Date.now());
-  const nonce = crypto.randomUUID();
-  const signature = await createHmacSignature(secret, timestamp, nonce, bodyText);
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-CS-Timestamp": timestamp,
-      "X-CS-Nonce": nonce,
-      "X-CS-Signature": signature,
-    },
-    body: bodyText,
-  });
-
-  console.log("edge_bot_event:done");
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Shopify intent sync failed: ${response.status} ${errorText}`);
-  }
-
-  return true;
-}
-
-async function syncIntentProfileToShopifyAdmin(env, payload, scoredProfile) {
-  const tokenMap = parseShopifyAdminTokenMap(env);
-  const accessToken = tokenMap[payload.shop];
-  const ownerId = normalizeCustomerId(payload.customerId);
-  if (!accessToken || !ownerId) return false;
-
-  const apiVersion = normalizeAdminApiVersion(env.SHOPIFY_ADMIN_API_VERSION);
-  const syncPayload = buildIntentSyncPayload(payload, scoredProfile);
-  const metafields = [
-    {
-      ownerId,
-      namespace: SHOPIFY_INTENT_NAMESPACE,
-      key: "intent_score",
-      type: "number_integer",
-      value: String(syncPayload.intentScore),
-    },
-    {
-      ownerId,
-      namespace: SHOPIFY_INTENT_NAMESPACE,
-      key: "intent_tier",
-      type: "single_line_text_field",
-      value: syncPayload.intentTier,
-    },
-    {
-      ownerId,
-      namespace: SHOPIFY_INTENT_NAMESPACE,
-      key: "intent_updated_at",
-      type: "date_time",
-      value: syncPayload.intentUpdatedAt,
-    },
-    {
-      ownerId,
-      namespace: SHOPIFY_INTENT_NAMESPACE,
-      key: "intent_model_version",
-      type: "single_line_text_field",
-      value: syncPayload.intentModelVersion,
-    },
-  ];
-
-  const response = await fetch(`https://${payload.shop}/admin/api/${apiVersion}/graphql.json`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": accessToken,
-    },
-    body: JSON.stringify({
-      query: `mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) {
-        metafieldsSet(metafields: $metafields) {
-          metafields {
-            namespace
-            key
-            value
-            updatedAt
-          }
-          userErrors {
-            field
-            message
-            code
-          }
-        }
-      }`,
-      variables: { metafields },
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Shopify direct intent sync failed: ${response.status} ${errorText}`);
-  }
-
-  const result = await response.json();
-  const userErrors = result?.data?.metafieldsSet?.userErrors || [];
-  if (userErrors.length > 0) {
-    const formattedErrors = userErrors.map((error) => error.message).join("; ");
-    throw new Error(`Shopify direct intent sync rejected metafields: ${formattedErrors}`);
-  }
-
-  return true;
 }
 
 function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidence) {
@@ -1485,130 +1078,6 @@ async function handlePixelGuardEvent(request, env, corsHeaders, ctx) {
   ).bind(shop, today, pixelCount, pixelCount).run();
 
   return jsonResponse({ ok: true, accepted: true, pixelsProtected: pixelCount }, 200, corsHeaders);
-}
-
-async function handleIntentEvent(request, env, corsHeaders, ctx) {
-  // Fire-and-forget probabilistic cleanup (no await — doesn't block the hot path).
-  pruneSecurityTables(env, ctx);
-  const { body } = await parseJsonRequest(request);
-  const payload = normalizeIntentEventPayload(body);
-  const ip = extractIp(request);
-  const previousProfile = await fetchIntentProfile(env, payload.shop, payload.visitorKey);
-
-  await applyRateLimit(env, "intent_event", `${payload.shop}:${ip}`, INTENT_EVENT_LIMIT, 60);
-
-  await env.DB.prepare(
-    `INSERT INTO intent_events (
-      shop, visitor_key, session_id, event_type, page_type, page, product_id,
-      customer_id, email_hash, bot_score, bot_confidence, is_bot, is_legitimate, metadata
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(
-    payload.shop,
-    payload.visitorKey,
-    payload.sessionId || null,
-    payload.eventType,
-    payload.pageType || null,
-    payload.page || null,
-    payload.productId || null,
-    payload.customerId || null,
-    payload.emailHash || null,
-    payload.botContext.botScore,
-    payload.botContext.confidence,
-    payload.botContext.isBot ? 1 : 0,
-    payload.botContext.isLegitimate ? 1 : 0,
-    JSON.stringify(payload.metadata),
-  ).run();
-
-  const events = await fetchIntentEvents(env, payload.shop, payload.visitorKey);
-  const scoredProfile = scoreIntentProfile(events, payload.botContext);
-  await upsertIntentProfile(env, payload, scoredProfile);
-
-  if (shouldSyncCustomerProfile(previousProfile, scoredProfile, payload) && ctx?.waitUntil) {
-    ctx.waitUntil(
-      syncIntentProfileToShopify(env, payload, scoredProfile, new URL(request.url).origin).catch((error) => {
-        console.error("intent-sync-customer-failed", error?.message || error);
-      }),
-    );
-  }
-
-  await env.DB.prepare(
-    `DELETE FROM intent_events WHERE shop = ? AND visitor_key = ? AND created_at < datetime('now', '-45 days')`
-  ).bind(payload.shop, payload.visitorKey).run();
-
-  return jsonResponse({
-    ok: true,
-    visitorKey: payload.visitorKey,
-    intentScore: scoredProfile.intentScore,
-    intentTier: scoredProfile.intentTier,
-    intentConfidence: scoredProfile.intentConfidence,
-    intentSignals: scoredProfile.intentSignals,
-    botContext: {
-      excluded: scoredProfile.botContext.excluded,
-      capped: scoredProfile.botContext.capped,
-      confidence: scoredProfile.botContext.confidence,
-      botScore: scoredProfile.botContext.botScore,
-    },
-  }, 200, corsHeaders);
-}
-
-async function handleBloomreachIntentProfile(request, env, corsHeaders, ctx) {
-  // Fire-and-forget probabilistic cleanup (no await — doesn't block the hot path).
-  pruneSecurityTables(env, ctx);
-  const ip = extractIp(request);
-  await applyRateLimit(env, "bloomreach_lookup", ip, BLOOMREACH_LOOKUP_LIMIT, 60);
-
-  const { rawText, body } = await parseJsonRequest(request);
-  await verifySignedRequest(request, env, rawText, "bloomreach_intent_profile");
-
-  const shop = normalizeShopDomain(body.shop);
-  const visitorKey = sanitizeString(body.visitorKey, 120);
-  const customerId = normalizeCustomerId(body.customerId);
-  const emailHash = sanitizeEmailHash(body.emailHash);
-
-  if (!shop) throw new HttpError("Missing shop", 400);
-  if (!visitorKey && !customerId && !emailHash) {
-    throw new HttpError("Provide visitorKey, customerId, or emailHash", 400);
-  }
-
-  const query = visitorKey
-    ? {
-        sql: `SELECT * FROM intent_profiles WHERE shop = ? AND visitor_key = ? LIMIT 1`,
-        params: [shop, visitorKey],
-      }
-    : customerId
-      ? {
-          sql: `SELECT * FROM intent_profiles WHERE shop = ? AND customer_id = ? ORDER BY updated_at DESC LIMIT 1`,
-          params: [shop, customerId],
-        }
-      : {
-          sql: `SELECT * FROM intent_profiles WHERE shop = ? AND email_hash = ? ORDER BY updated_at DESC LIMIT 1`,
-          params: [shop, emailHash],
-        };
-
-  const profile = await env.DB.prepare(query.sql).bind(...query.params).first();
-  if (!profile) {
-    return jsonResponse({ found: false, shop }, 200, corsHeaders);
-  }
-
-  return jsonResponse({
-    found: true,
-    shop,
-    visitorKey: profile.visitor_key,
-    customerId: profile.customer_id || null,
-    emailHash: profile.email_hash || null,
-    intentScore: profile.intent_score || 0,
-    intentTier: profile.intent_tier || "unknown",
-    intentConfidence: profile.intent_confidence || "low",
-    lastSeenAt: profile.last_seen_at || null,
-    firstSeenAt: profile.first_seen_at || null,
-    purchasedAt: profile.purchased_at || null,
-    signals: safeJsonParse(profile.signal_summary, []),
-    botContext: {
-      isExcluded: Boolean(profile.bot_excluded),
-      confidence: profile.bot_confidence || "low",
-      botScore: Number(profile.bot_score) || 0,
-    },
-  }, 200, corsHeaders);
 }
 
 async function handleDashboardData(request, url, env, corsHeaders, ctx) {
@@ -2357,7 +1826,7 @@ tr:hover td{background:#334155}
 <script>
 let lineChart, donutChart;
 let lastDashboardFetchAt = 0;
-const DASHBOARD_REFRESH_MS = 60000;
+const DASHBOARD_REFRESH_MS = 1800000;
 
 async function loadDashboard() {
   const shop = document.getElementById('shopInput').value.trim();
@@ -2653,7 +2122,7 @@ function buildEmbeddedAdminHTML(shop, origin) {
 </head>
 <body>
 <div class="wrap">
-  <div class="hero"><h1>Commerce Shield</h1><p>Bot-blocker stays the default home tab. User-intent is separated from bot scoring. Shopify app health and Conversion MRI both stay conservative so the app misses weak signals before it recommends a bad fix.</p></div>
+  <div class="hero"><h1>Commerce Shield</h1><p>Bot-blocker is the only active module. This control plane is focused on bot detection and marketing pixel suppression.</p></div>
   <div class="strip">Live Worker control plane. This is the production Shopify app surface configured in this repo.</div>
   <div id="msg" class="msg"></div>
   <div class="controls">
@@ -2668,24 +2137,19 @@ function buildEmbeddedAdminHTML(shop, origin) {
   <section id="panel-bot-blocker" class="panel active"><div class="load">Load a shop to inspect storefront traffic and bot protection.</div></section>
 </div>
 <script>
-const SHOPIFY_API_KEY='dc386b789af148f54d80b54d07e63215';(function bootstrapEmbeddedLaunch(){const params=new URLSearchParams(window.location.search);const qShop=(params.get('shop')||'').trim().toLowerCase();if(qShop&&/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(qShop)){const input=document.getElementById('shopInput');if(input)input.value=qShop;}})();const API='${origin}';const state={tab:'bot-blocker',cache:{},lastFetch:{}};const TAB_REFRESH_MS={'bot-blocker':60000};function esc(v){const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML}function fmt(v){return (Number(v)||0).toLocaleString()}function pct(v){return (Number(v)||0).toFixed(1)}function shop(){return document.getElementById('shopInput').value.trim()}function days(){return document.getElementById('daysSelect').value}function panel(id){return document.getElementById('panel-'+id)}function msg(text,tone){const el=document.getElementById('msg');if(!text){el.className='msg';el.textContent='';return}el.className='msg show '+(tone==='error'?'bad':'ok');el.textContent=text}function loading(id,text){panel(id).innerHTML='<div class="load">'+esc(text)+'</div>'}async function api(path,opt){const reqOpt=Object.assign({cache:'force-cache'},opt||{});const res=await fetch(path,reqOpt);const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'Request failed');return data}function needShop(){const s=shop();if(!s){msg('Enter a valid .myshopify.com domain first.','error');return''}return s}function getAdminToken(){let token=sessionStorage.getItem('cs_admin_token')||'';if(!token){token=prompt('Enter Commerce Shield admin token to edit theme.liquid:')||'';if(token)sessionStorage.setItem('cs_admin_token',token)}return token}async function installPixelGuard(){const s=needShop();if(!s)return;const token=getAdminToken();if(!token){msg('Admin token required to edit theme.liquid.','error');return}try{msg('Installing pixel guard at the beginning of theme.liquid head...','success');const res=await fetch(API+'/api/admin/install-pixel-guard',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({shop:s})});const data=await res.json().catch(()=>({}));if(res.status===401||res.status===403){sessionStorage.removeItem('cs_admin_token')}if(!res.ok)throw new Error(data.error||'Unable to install pixel guard');state.cache={};msg(data.message||'Pixel guard installed.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to install pixel guard.','error')}}
+const SHOPIFY_API_KEY='dc386b789af148f54d80b54d07e63215';(function bootstrapEmbeddedLaunch(){const params=new URLSearchParams(window.location.search);const qShop=(params.get('shop')||'').trim().toLowerCase();if(qShop&&/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(qShop)){const input=document.getElementById('shopInput');if(input)input.value=qShop;}})();const API='${origin}';const state={tab:'bot-blocker',cache:{},lastFetch:{}};const TAB_REFRESH_MS={'bot-blocker':1800000};function esc(v){const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML}function fmt(v){return (Number(v)||0).toLocaleString()}function pct(v){return (Number(v)||0).toFixed(1)}function shop(){return document.getElementById('shopInput').value.trim()}function days(){return document.getElementById('daysSelect').value}function panel(id){return document.getElementById('panel-'+id)}function msg(text,tone){const el=document.getElementById('msg');if(!text){el.className='msg';el.textContent='';return}el.className='msg show '+(tone==='error'?'bad':'ok');el.textContent=text}function loading(id,text){panel(id).innerHTML='<div class="load">'+esc(text)+'</div>'}async function api(path,opt){const reqOpt=Object.assign({cache:'force-cache'},opt||{});const res=await fetch(path,reqOpt);const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'Request failed');return data}function needShop(){const s=shop();if(!s){msg('Enter a valid .myshopify.com domain first.','error');return''}return s}function getAdminToken(){let token=sessionStorage.getItem('cs_admin_token')||'';if(!token){token=prompt('Enter Commerce Shield admin token to edit theme.liquid:')||'';if(token)sessionStorage.setItem('cs_admin_token',token)}return token}async function installPixelGuard(){const s=needShop();if(!s)return;const token=getAdminToken();if(!token){msg('Admin token required to edit theme.liquid.','error');return}try{msg('Installing pixel guard at the beginning of theme.liquid head...','success');const res=await fetch(API+'/api/admin/install-pixel-guard',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({shop:s})});const data=await res.json().catch(()=>({}));if(res.status===401||res.status===403){sessionStorage.removeItem('cs_admin_token')}if(!res.ok)throw new Error(data.error||'Unable to install pixel guard');state.cache={};msg(data.message||'Pixel guard installed.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to install pixel guard.','error')}}
 function metric(cls,label,value,hint){return '<div class="metric '+cls+'"><div class="k">'+esc(label)+'</div><div class="v">'+esc(value)+'</div><div class="h">'+esc(hint||'')+'</div></div>'}
 function switches(name,checked,title,copy){return '<label class="switch"><input type="checkbox" name="'+esc(name)+'"'+(checked?' checked':'')+'><div><strong>'+esc(title)+'</strong><span>'+esc(copy)+'</span></div></label>'}
 function findings(items){if(!(items||[]).length)return '<div class="card"><p class="sub">No hard-evidence findings were produced under the current conservative settings.</p></div>';return items.map(function(item){const tone=item.severity==='high'?'bad':item.severity==='medium'?'warn':'info';return '<div class="finding"><div class="row"><span class="chip '+tone+'">'+esc(item.severity)+'</span><span class="chip info">'+esc(item.category)+'</span><span class="sub">'+esc(item.location||'')+'</span><span class="sub">Impact '+pct(item.missedConversionPct||0)+'%</span></div><h4>'+esc(item.title)+'</h4><p>'+esc(item.evidence||item.fix||'')+'</p>'+(item.fix?'<p style="margin-top:8px"><strong>Fix:</strong> '+esc(item.fix)+'</p>':'')+'</div>'}).join('')}
 async function loadBot(force){const s=needShop();if(!s)return;const key='bot:'+s+':'+days();if(!force&&state.cache[key])return renderBot(state.cache[key]);loading('bot-blocker','Loading bot-blocker analytics...');const data={dash:await api(API+'/api/dashboard?shop='+encodeURIComponent(s)+'&days='+encodeURIComponent(days())),recent:await api(API+'/api/recent?shop='+encodeURIComponent(s)+'&limit=50'),settings:await api(API+'/api/admin/settings?shop='+encodeURIComponent(s))};state.cache[key]=data;renderBot(data)}
 function renderBot(data){const t=data.dash.totals||{};const y=(data.settings&&data.settings.settings&&data.settings.settings.intent)||{};const total=Number(t.totalVisits)||0;let h='<div class="head"><div><h2>Bot-Blocker</h2><p>Commerce Shield remains the default home tab. Bot risk and customer intent stay separated so the storefront blocker can stay aggressive without polluting Bloomreach-facing intent tiers.</p></div><span class="chip ok">Live storefront guard</span></div>';h+='<div class="grid cards">'+metric('','Sessions',fmt(total),'All storefront sessions captured in the selected period.')+metric('','Humans',fmt(t.humanVisits||0),'Traffic that stayed on the safe path.')+metric('bad','Bots detected',fmt(t.botVisits||0),'Sessions classified as bots and isolated from clean analytics.')+metric('warn','Bot rate',pct(total?((Number(t.botVisits)||0)/total)*100:0)+'%','Share of selected traffic classified as bot activity.')+metric('','Coupon bots',fmt(t.couponBots||0),'Known coupon extensions and similar crawler traffic.')+metric('','Pixels protected',fmt(t.pixelsProtected||0),'High-confidence bot events blocked from downstream pixels.')+metric('','Emails blocked',fmt(t.disposableEmailsBlocked||0),'Disposable email attempts rejected by Commerce Shield.')+'</div>';h+='<div class="grid two"><div class="card"><h3>Traffic Sources</h3><table><thead><tr><th>Source</th><th>Visits</th><th>Bots</th><th>Bot %</th></tr></thead><tbody>';(data.dash.sources||[]).forEach(function(row){const r=Number(row.count)?((Number(row.bots)||0)/Number(row.count))*100:0;h+='<tr><td>'+esc(row.source||'direct')+'</td><td>'+fmt(row.count)+'</td><td>'+fmt(row.bots)+'</td><td>'+pct(r)+'%</td></tr>'});if(!(data.dash.sources||[]).length)h+='<tr><td colspan="4" class="sub">No source data has been recorded yet.</td></tr>';h+='</tbody></table></div>';h+='<div class="card"><h3>Recent Visits</h3><table><thead><tr><th>Time</th><th>Type</th><th>Score</th><th>Confidence</th><th>Source</th></tr></thead><tbody>';(data.recent.visits||[]).slice(0,20).forEach(function(v){const type=v.is_coupon_bot?'Coupon Bot':v.is_legitimate?'Crawler':v.is_bot?'Bot':'Human';h+='<tr><td>'+esc(v.created_at?new Date(v.created_at+'Z').toLocaleString():'—')+'</td><td>'+esc(type)+'</td><td>'+pct(v.bot_score||0)+'</td><td>'+esc(v.confidence||'low')+'</td><td>'+esc(v.source||'direct')+'</td></tr>'});if(!(data.recent.visits||[]).length)h+='<tr><td colspan="5" class="sub">No visit classifications recorded yet.</td></tr>';h+='</tbody></table></div></div>';h+='<div class="card"><h3>Bot Guard Controls</h3><form onsubmit="return saveSettings(event,\\'botProtection\\')"><div class="sub" style="margin-bottom:10px">Protection intensity '+fmt(y.botProtectionIntensity||5)+' / 10</div><p><input type="range" name="botProtectionIntensity" min="1" max="10" value="'+esc(y.botProtectionIntensity||5)+'" style="width:100%"></p>'+switches('botProtectionEnabled',y.botProtectionEnabled!==false,'Master bot protection switch','Turns storefront bot suppression on or off for non-technical operators.')+'<p style="margin-top:14px"><button type="submit">Save Bot Guard Controls</button></p></form></div>';panel('bot-blocker').innerHTML=h}
-async function loadIntent(force){const s=needShop();if(!s)return;const key='intent:'+s;if(!force&&state.cache[key])return renderIntent(state.cache[key]);loading('user-intent','Loading user-intent cohorts and controls...');const data=await api(API+'/api/admin/intent-summary?shop='+encodeURIComponent(s));state.cache[key]=data;renderIntent(data)}
-function renderIntent(data){const c=data.cohorts||{},x=data.settings.intent||{};let h='<div class="head"><div><h2>User-Intent</h2><p>Intent scores are kept separate from bots and crawlers. High-intent, medium-intent, low-intent, and confirmed bots/crawlers are shown as distinct cohorts so downstream personalization stays clean.</p></div><span class="chip ok">'+esc(data.sensitivityLabel||'Balanced')+'</span></div>';h+='<div class="grid cards">'+metric('','High-intent',fmt(c.highIntent||0),'Purchase-ready and high-intent shopper profiles.')+metric('warn','Medium-intent',fmt(c.mediumIntent||0),'Considering or interested visitors.')+metric('ok','Low-intent',fmt(c.lowIntent||0),'Browsing visitors that have not crossed a stronger threshold.')+metric('bad','Confirmed bots / crawlers',fmt(c.botsAndCrawlers||0),'Profiles intentionally suppressed from positive intent promotion.')+'</div>';h+='<div class="grid two"><div class="card"><h3>Top Signals</h3><table><thead><tr><th>Signal</th><th>Profiles</th></tr></thead><tbody>';(data.topSignals||[]).forEach(function(r){h+='<tr><td>'+esc(r.type)+'</td><td>'+fmt(r.count)+'</td></tr>'});if(!(data.topSignals||[]).length)h+='<tr><td colspan="2" class="sub">No signal summaries yet.</td></tr>';h+='</tbody></table></div><div class="card"><h3>Tracked Paths</h3><table><thead><tr><th>Path</th><th>Hits</th></tr></thead><tbody>';(data.topPaths||[]).forEach(function(r){h+='<tr><td>'+esc(r.path)+'</td><td>'+fmt(r.hits)+'</td></tr>'});if(!(data.topPaths||[]).length)h+='<tr><td colspan="2" class="sub">No path activity yet.</td></tr>';h+='</tbody></table></div></div>';h+='<div class="card"><h3>Intent Controls</h3><form onsubmit="return saveSettings(event,\\'intent\\')"><div class="sub" style="margin-bottom:10px">Average score '+fmt(c.averageScore||0)+' • Sensitivity '+fmt(x.sensitivity||62)+'%</div><p><input type="range" name="sensitivity" min="10" max="95" value="'+esc(x.sensitivity||62)+'" style="width:100%"></p><p class="sub" style="margin:10px 0 6px">Scored path URLs</p><textarea name="includePaths">'+esc((x.includePaths||[]).join('\\n'))+'</textarea>'+switches('rewardProductViews',x.rewardProductViews,'Reward product views','Keep PDP exploration as a positive signal.')+switches('rewardCartSignals',x.rewardCartSignals,'Reward cart signals','Let cart and checkout-start events move shoppers up tiers.')+switches('rewardReturningSessions',x.rewardReturningSessions,'Reward returning sessions','Give repeat visitors a measured uplift.')+switches('suppressBotsAndCrawlers',x.suppressBotsAndCrawlers,'Suppress bots and crawlers','Prevent known bots and legitimate crawlers from getting promoted.')+switches('conservativeMode',x.conservativeMode,'Conservative mode','Prefer silence over a false high-intent label.')+'<p style="margin-top:14px"><button type="submit">Save User-Intent Settings</button></p></form></div>';panel('user-intent').innerHTML=h}
-async function loadHealth(force){const s=needShop();if(!s)return;const key='health:'+s;if(!force&&state.cache[key])return renderHealth(state.cache[key]);loading('shopify-app-health','Running conservative app health checks...');const data=await api(API+'/api/admin/store-audit?shop='+encodeURIComponent(s));state.cache[key]=data;renderHealth(data)}
-function renderHealth(data){const x=data.settings.appHealth||{},status=data.status||'healthy';let h='<div class="head"><div><h2>Shopify App Health</h2><p>This dashboard only flags strong evidence: legacy ScriptTag injections, duplicate pixel libraries, risky inline patterns, and missing core theme integration primitives. It avoids calling an app malicious unless there is direct evidence.</p></div><span class="chip '+(status==='critical'?'bad':status==='warning'?'warn':status==='limited'||status==='disconnected'?'info':'ok')+'">'+esc(status)+'</span></div>';if(data.guidance)h+='<div class="card"><p class="sub">'+esc(data.guidance)+'</p></div>';h+='<div class="grid cards">'+metric('','Legacy ScriptTags',fmt(data.summary.legacyScriptTags||0),'Theme-facing integrations still using the ScriptTag API.')+metric('','External script hosts',fmt(data.summary.externalScriptHosts||0),'Unique third-party hosts in the main theme layout.')+metric('bad','Risky patterns',fmt(data.summary.riskyPatterns||0),'document.write / eval style patterns found in live theme code.')+metric('warn','Duplicate pixels',fmt(data.summary.duplicatePixels||0),'Repeated tracking libraries in theme or injected scripts.')+'</div>';if(data.mainTheme)h+='<div class="card"><h3>Main Theme</h3><p class="sub">'+esc(data.mainTheme.name)+' ('+esc(data.mainTheme.role)+') updated '+esc(new Date(data.mainTheme.updatedAt).toLocaleString())+'</p></div>';h+=findings(data.findings||[]);h+='<div class="card"><h3>Upgrade Candidates</h3><table><thead><tr><th>Source</th><th>Scope</th><th>Updated</th></tr></thead><tbody>';(data.upgradeCandidates||[]).forEach(function(r){h+='<tr><td>'+esc(r.src)+'</td><td>'+esc(r.displayScope||'all')+'</td><td>'+esc(r.updatedAt?new Date(r.updatedAt).toLocaleString():'—')+'</td></tr>'});if(!(data.upgradeCandidates||[]).length)h+='<tr><td colspan="3" class="sub">No ScriptTag upgrade candidates were found.</td></tr>';h+='</tbody></table></div>';h+='<div class="card"><h3>App Health Controls</h3><form onsubmit="return saveSettings(event,\\'appHealth\\')">'+switches('detectLegacyScriptTags',x.detectLegacyScriptTags,'Detect legacy ScriptTags','Flag storefront apps that still depend on ScriptTag injection.')+switches('requireThemeAppExtensions',x.requireThemeAppExtensions,'Require theme app extension patterns','Warn when the live theme does not show safe app-embed style integration.')+switches('detectDuplicatePixels',x.detectDuplicatePixels,'Detect duplicate pixels','Only surface duplicate vendors when the same library appears more than once.')+switches('reviewInlineScripts',x.reviewInlineScripts,'Review inline scripts','Inspect the main theme for direct risky JS patterns.')+switches('conservativeFlagging',x.conservativeFlagging,'Conservative flagging','Prefer fewer, higher-confidence findings over noisy alerts.')+'<p style="margin-top:14px"><button type="submit">Save App Health Settings</button></p></form></div>';panel('shopify-app-health').innerHTML=h}
-async function loadMri(force){const s=needShop();if(!s)return;const key='mri:'+s;if(!force&&state.cache[key])return renderMri(state.cache[key]);loading('conversion-mri','Building conservative conversion diagnostics...');const data=await api(API+'/api/admin/conversion-mri?shop='+encodeURIComponent(s));state.cache[key]=data;renderMri(data)}
-function renderMri(data){const x=data.settings.conversionMri||{},f=data.funnel||{};let h='<div class="head"><div><h2>Conversion MRI</h2><p>Conversion MRI ties funnel drop-off to conservative technical evidence. It would rather miss an issue than recommend a noisy or harmful fix path.</p></div><span class="chip '+(data.auditStatus==='critical'?'bad':data.auditStatus==='warning'?'warn':data.auditStatus==='limited'||data.auditStatus==='disconnected'?'info':'ok')+'">'+esc(data.auditStatus||'healthy')+'</span></div>';h+='<div class="grid cards">'+metric('warn','Missed conversion',pct(data.totalMissedConversionPct||0)+'%','Estimated recoverable conversion from the current evidence-backed findings.')+metric('','Product views',fmt(f.product_view||0),'Distinct profiles reaching product detail pages.')+metric('','Add to cart',fmt(f.add_to_cart||0),'Distinct profiles progressing into the cart.')+metric('','Checkout start',fmt(f.checkout_start||0),'Distinct profiles reaching checkout.')+'</div>';h+=findings(data.diagnostics||[]);h+='<div class="card"><h3>Conversion MRI Controls</h3><form onsubmit="return saveSettings(event,\\'conversionMri\\')">'+switches('conservativeMode',x.conservativeMode,'Conservative mode','Limit the report to the strongest few findings.')+switches('runAppChecks',x.runAppChecks,'App conflict checks','Include store-health findings that plausibly hurt conversion.')+switches('runContentChecks',x.runContentChecks,'Content checks','Allow PDP and cart-content friction diagnostics when ratios are clearly weak.')+switches('runAdaChecks',x.runAdaChecks,'ADA checks','Only surface layout-level accessibility issues with direct evidence.')+switches('runSeoChecks',x.runSeoChecks,'SEO checks','Inspect canonical and title output in the main layout.')+switches('runSpeedChecks',x.runSpeedChecks,'Site speed checks','Use script density and risky inline patterns in the MRI model.')+'<p style="margin-top:14px"><button type="submit">Save Conversion MRI Settings</button></p></form></div><div class="card"><p class="sub">Conversion MRI is intentionally biased toward under-reporting. Weak evidence stays out of the report.</p></div>';panel('conversion-mri').innerHTML=h}
-async function saveSettings(event,section){event.preventDefault();const s=needShop();if(!s)return false;try{const fd=new FormData(event.currentTarget);const payload={shop:s};if(section==='intent'){payload.intent={sensitivity:Number(fd.get('sensitivity'))||62,includePaths:String(fd.get('includePaths')||'').split(/\\r?\\n/).filter(Boolean),rewardProductViews:fd.get('rewardProductViews')==='on',rewardCartSignals:fd.get('rewardCartSignals')==='on',rewardReturningSessions:fd.get('rewardReturningSessions')==='on',suppressBotsAndCrawlers:fd.get('suppressBotsAndCrawlers')==='on',conservativeMode:fd.get('conservativeMode')==='on'}}if(section==='botProtection'){payload.intent={botProtectionEnabled:fd.get('botProtectionEnabled')==='on',botProtectionIntensity:Number(fd.get('botProtectionIntensity'))||5}}if(section==='appHealth'){payload.appHealth={detectLegacyScriptTags:fd.get('detectLegacyScriptTags')==='on',requireThemeAppExtensions:fd.get('requireThemeAppExtensions')==='on',detectDuplicatePixels:fd.get('detectDuplicatePixels')==='on',reviewInlineScripts:fd.get('reviewInlineScripts')==='on',conservativeFlagging:fd.get('conservativeFlagging')==='on'}}if(section==='conversionMri'){payload.conversionMri={conservativeMode:fd.get('conservativeMode')==='on',runAppChecks:fd.get('runAppChecks')==='on',runContentChecks:fd.get('runContentChecks')==='on',runAdaChecks:fd.get('runAdaChecks')==='on',runSeoChecks:fd.get('runSeoChecks')==='on',runSpeedChecks:fd.get('runSpeedChecks')==='on'}}await api(API+'/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});state.cache={};msg('Settings saved. Reloading the active tab.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to save settings.','error')}return false}
+async function saveSettings(event,section){event.preventDefault();const s=needShop();if(!s)return false;try{if(section!=='botProtection')return false;const fd=new FormData(event.currentTarget);const payload={shop:s,intent:{botProtectionEnabled:fd.get('botProtectionEnabled')==='on',botProtectionIntensity:Number(fd.get('botProtectionIntensity'))||5}};await api(API+'/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});state.cache={};msg('Settings saved. Reloading the active tab.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to save settings.','error')}return false}
 function activateTab(tab){state.tab=tab;document.querySelectorAll('.tabs button').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-tab')===tab)});document.querySelectorAll('.panel').forEach(function(p){p.classList.toggle('active',p.id==='panel-'+tab)});refreshActive(false)}
-async function refreshActive(force){msg('','success');const now=Date.now();const minMs=TAB_REFRESH_MS[state.tab]||60000;const last=state.lastFetch[state.tab]||0;if(!force&&now-last<minMs){return}state.lastFetch[state.tab]=now;try{if(state.tab==='bot-blocker')await loadBot(force);if(state.tab==='user-intent')await loadIntent(force);if(state.tab==='shopify-app-health')await loadHealth(force);if(state.tab==='conversion-mri')await loadMri(force)}catch(error){msg(error.message||'Unable to load data.','error')}}
+async function refreshActive(force){msg('','success');const now=Date.now();const minMs=TAB_REFRESH_MS[state.tab]||1800000;const last=state.lastFetch[state.tab]||0;if(!force&&now-last<minMs){return}state.lastFetch[state.tab]=now;try{if(state.tab==='bot-blocker')await loadBot(force)}catch(error){msg(error.message||'Unable to load data.','error')}}
 window.activateTab=activateTab;window.refreshActive=refreshActive;window.saveSettings=saveSettings;window.installPixelGuard=installPixelGuard;if(document.getElementById('shopInput').value){setTimeout(function(){refreshActive(true)},180)}
 <\/script>
 </body>
 </html>`;
 }
+
 

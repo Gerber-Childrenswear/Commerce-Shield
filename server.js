@@ -9,8 +9,8 @@ const PIXEL_GUARD_MAX_ENTRIES = 16;
 
 const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || 'dc386b789af148f54d80b54d07e63215';
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
-const SHOPIFY_SCOPES = 'read_discounts,write_discounts,read_orders,write_orders,read_products,write_products,read_script_tags,write_script_tags,read_themes,write_themes';
-const SHOPIFY_APP_URL = (process.env.SHOPIFY_APP_URL || 'https://commerce-shield.onrender.com').replace(/\/$/, '');
+const SHOPIFY_SCOPES = 'read_script_tags,write_script_tags,read_themes,write_themes';
+const SHOPIFY_APP_URL = (process.env.SHOPIFY_APP_URL || 'https://commerce-shield-prod.ncassidy.workers.dev').replace(/\/$/, '');
 const OAUTH_REDIRECT_URI = `${SHOPIFY_APP_URL}/auth/callback`;
 const OAUTH_NONCE_TTL_MS = 10 * 60 * 1000;
 const oauthNonces = new Map();

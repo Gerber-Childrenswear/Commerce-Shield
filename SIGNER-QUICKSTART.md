@@ -99,7 +99,7 @@ Or if `isBot: true` in body: `{"ok":true,"accepted":true}`
 
 ### 4. Verify in Commerce Shield Dashboard
 
-1. Go to `https://commerce-shield.onrender.com` (or your Render URL)
+1. Go to `https://commerce-shield-prod.ncassidy.workers.dev` (or your configured Cloudflare Worker URL)
 2. **Dashboard** tab
 3. Look for "Bot Events (GTM Server)" row
 4. Should see counts increment when events fire

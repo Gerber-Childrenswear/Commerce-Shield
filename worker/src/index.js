@@ -64,10 +64,12 @@ export default {
     const corsHeaders = buildCorsHeaders(request, env, sensitiveRoute);
 
     const quotaState = await trackMonthlyQuotaUsage(env);
+    scheduleQuotaAlerts(env, ctx, quotaState, request, url);
+
     if (url.pathname === "/api/system/quota" && request.method === "GET") {
       return jsonResponse({
         ok: true,
-        quota: quotaState || {
+        quota: toPublicQuotaState(quotaState) || {
           enabled: false,
           reason: "CLOUDFLARE_MONTHLY_REQUEST_QUOTA is not configured",
         },
@@ -164,6 +166,23 @@ function parsePositiveInteger(value, fallback = 0) {
   return Math.floor(parsed);
 }
 
+function parseQuotaAlertPercents(value) {
+  const fallback = [90, 95];
+  const raw = sanitizeString(value, 200);
+  if (!raw) return fallback;
+
+  const uniquePercents = new Set();
+  for (const part of raw.split(",")) {
+    const parsed = Number(part.trim());
+    if (!Number.isFinite(parsed)) continue;
+    const clamped = Math.min(99.99, Math.max(1, parsed));
+    uniquePercents.add(Number(clamped.toFixed(2)));
+  }
+
+  const parsedPercents = Array.from(uniquePercents).sort((left, right) => left - right);
+  return parsedPercents.length ? parsedPercents : fallback;
+}
+
 function resolveMonthlyQuotaConfig(env) {
   const monthlyQuotaLimit = parsePositiveInteger(
     env.CLOUDFLARE_MONTHLY_REQUEST_QUOTA
@@ -185,11 +204,21 @@ function resolveMonthlyQuotaConfig(env) {
     : 95;
 
   const shutoffThreshold = Math.max(1, Math.ceil(monthlyQuotaLimit * (shutoffPercent / 100)));
+  const alertPercents = parseQuotaAlertPercents(
+    env.CLOUDFLARE_QUOTA_ALERT_PERCENTS || env.WORKER_QUOTA_ALERT_PERCENTS,
+  );
+  const alertRules = alertPercents.map((percent) => ({
+    percent,
+    threshold: Math.max(1, Math.ceil(monthlyQuotaLimit * (percent / 100))),
+  }));
+  const alertWebhookUrl = sanitizeWebhookUrl(env.CLOUDFLARE_QUOTA_ALERT_WEBHOOK_URL || env.WORKER_QUOTA_ALERT_WEBHOOK_URL);
 
   return {
     monthlyQuotaLimit,
     shutoffPercent,
     shutoffThreshold,
+    alertRules,
+    alertWebhookUrl,
   };
 }
 
@@ -209,6 +238,18 @@ function secondsUntilIso(isoDate) {
   const target = Date.parse(isoDate);
   if (!Number.isFinite(target)) return 3600;
   return Math.max(60, Math.ceil((target - Date.now()) / 1000));
+}
+
+function sanitizeWebhookUrl(value) {
+  const candidate = sanitizeString(value, 2048);
+  if (!candidate) return "";
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
 }
 
 async function trackMonthlyQuotaUsage(env) {
@@ -235,6 +276,7 @@ async function trackMonthlyQuotaUsage(env) {
 
   const requestCount = Number(row?.count) || 0;
   const tripped = requestCount >= config.shutoffThreshold;
+  const crossedAlertRules = config.alertRules.filter((rule) => requestCount >= rule.threshold);
 
   return {
     enabled: true,
@@ -243,10 +285,88 @@ async function trackMonthlyQuotaUsage(env) {
     monthlyQuotaLimit: config.monthlyQuotaLimit,
     shutoffPercent: config.shutoffPercent,
     shutoffThreshold: config.shutoffThreshold,
+    alertPercents: config.alertRules.map((rule) => rule.percent),
+    crossedAlertPercents: crossedAlertRules.map((rule) => rule.percent),
+    alertWebhookConfigured: Boolean(config.alertWebhookUrl),
+    alertRules: crossedAlertRules,
+    alertWebhookUrl: config.alertWebhookUrl,
     remainingBeforeLimit: Math.max(0, config.monthlyQuotaLimit - requestCount),
     tripped,
     resetAtUtc: expiresAt,
   };
+}
+
+function scheduleQuotaAlerts(env, ctx, quotaState, request, url) {
+  if (!quotaState?.enabled || !Array.isArray(quotaState.alertRules) || quotaState.alertRules.length === 0) {
+    return;
+  }
+
+  const alertTask = processQuotaAlerts(env, quotaState, request, url).catch((error) => {
+    console.log("quota_alert:error", sanitizeString(String(error?.message || error), 400));
+  });
+
+  if (ctx && typeof ctx.waitUntil === "function") {
+    ctx.waitUntil(alertTask);
+  }
+}
+
+async function processQuotaAlerts(env, quotaState, request, url) {
+  const newlyTriggered = [];
+
+  for (const rule of quotaState.alertRules) {
+    const alertKey = `worker_quota_alert:${quotaState.month}:${rule.percent}`;
+    const result = await env.DB.prepare(
+      `INSERT INTO rate_limits (bucket_key, count, expires_at)
+       VALUES (?, 1, ?)
+       ON CONFLICT(bucket_key) DO NOTHING`
+    ).bind(alertKey, quotaState.resetAtUtc).run();
+
+    if ((result?.meta?.changes || 0) > 0) {
+      newlyTriggered.push(rule);
+    }
+  }
+
+  if (!newlyTriggered.length) return;
+
+  for (const rule of newlyTriggered) {
+    console.log(
+      "quota_alert:triggered",
+      `month=${quotaState.month}`,
+      `percent=${rule.percent}`,
+      `request_count=${quotaState.requestCount}`,
+      `limit=${quotaState.monthlyQuotaLimit}`,
+    );
+  }
+
+  if (!quotaState.alertWebhookUrl) return;
+
+  const endpointPath = sanitizeString(url?.pathname || "", 300);
+  const userAgent = sanitizeString(request?.headers?.get("user-agent") || "", 220);
+
+  for (const rule of newlyTriggered) {
+    const payload = {
+      event: "quota_threshold_crossed",
+      thresholdPercent: rule.percent,
+      month: quotaState.month,
+      requestCount: quotaState.requestCount,
+      monthlyQuotaLimit: quotaState.monthlyQuotaLimit,
+      remainingBeforeLimit: Math.max(0, quotaState.monthlyQuotaLimit - quotaState.requestCount),
+      resetAtUtc: quotaState.resetAtUtc,
+      tripped: quotaState.tripped,
+      endpointPath,
+      userAgent,
+      workerName: sanitizeString(env.WORKER_NAME || env.WORKER_ROUTE || "commerce-shield-prod", 120),
+      timestamp: new Date().toISOString(),
+    };
+
+    await fetch(quotaState.alertWebhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+  }
 }
 
 function quotaShutdownResponse(quotaState, corsHeaders) {
@@ -254,7 +374,7 @@ function quotaShutdownResponse(quotaState, corsHeaders) {
     ok: false,
     error: "monthly_quota_guard_engaged",
     message: "Commerce Shield is temporarily shut off to protect your Cloudflare monthly quota.",
-    quota: quotaState,
+    quota: toPublicQuotaState(quotaState),
   }), {
     status: 503,
     headers: {
@@ -267,6 +387,24 @@ function quotaShutdownResponse(quotaState, corsHeaders) {
       ...corsHeaders,
     },
   });
+}
+
+function toPublicQuotaState(quotaState) {
+  if (!quotaState) return null;
+  return {
+    enabled: Boolean(quotaState.enabled),
+    month: quotaState.month,
+    requestCount: Number(quotaState.requestCount) || 0,
+    monthlyQuotaLimit: Number(quotaState.monthlyQuotaLimit) || 0,
+    shutoffPercent: Number(quotaState.shutoffPercent) || 0,
+    shutoffThreshold: Number(quotaState.shutoffThreshold) || 0,
+    alertPercents: Array.isArray(quotaState.alertPercents) ? quotaState.alertPercents : [],
+    crossedAlertPercents: Array.isArray(quotaState.crossedAlertPercents) ? quotaState.crossedAlertPercents : [],
+    alertWebhookConfigured: quotaState.alertWebhookConfigured === true,
+    remainingBeforeLimit: Number(quotaState.remainingBeforeLimit) || 0,
+    tripped: quotaState.tripped === true,
+    resetAtUtc: quotaState.resetAtUtc,
+  };
 }
 
 function buildReadCacheKey(route, shop, params = {}) {

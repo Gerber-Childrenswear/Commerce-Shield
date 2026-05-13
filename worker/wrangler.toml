@@ -27,7 +27,6 @@ CLOUDFLARE_QUOTA_ALERT_PERCENTS = "90,95"
 BLOCKED_EVENT_SOURCES = "gtm-server"
 PAUSED_SHOPS = "gcw-dev.myshopify.com"
 STOREFRONT_DOMAIN = "gerberchildrenswear.myshopify.com"
-DASHBOARD_PASSWORD = "sugi2.0"
 
 [[d1_databases]]
 binding = "DB"

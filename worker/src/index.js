@@ -27,6 +27,20 @@ const SHOPIFY_THEME_INSTALL_REQUIRED_SCOPES = ["read_themes", "write_themes"];
 const PIXEL_GUARD_MARKER = "Commerce Shield Pixel Guard";
 const DEFAULT_HUMAN_VISIT_SAMPLE_RATE = 0.05;
 const DEFAULT_SUSPICIOUS_VISIT_THRESHOLD = 0.35;
+const DEFAULT_TRUSTED_CRAWLER_UA_HINTS = [
+  "brightedge",
+  "powermapper",
+  "googlebot",
+  "bingbot",
+  "duckduckbot",
+  "facebookexternalhit",
+  "yandexbot",
+  "semrushbot",
+  "ahrefsbot",
+  "screaming frog",
+  "siteimprove",
+  "contentking",
+];
 const DATACENTER_ASNS = new Set([
   // Major cloud/datacenter providers frequently used by scraping traffic.
   14618, 16509, 8075, 15169, 19527, 20473, 396982, 45102,
@@ -70,6 +84,31 @@ function isBlockedEventSource(env, source) {
   if (!normalized) return false;
   const blocked = parseBlockedEventSources(env);
   return blocked.has(normalized);
+}
+
+function parseHintList(value, fallback = []) {
+  const raw = sanitizeString(value, 1000);
+  if (!raw) return fallback.slice();
+  const hints = raw
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  return hints.length ? hints : fallback.slice();
+}
+
+function getTrustedCrawlerHints(env) {
+  return parseHintList(env?.TRUSTED_CRAWLER_UA_HINTS, DEFAULT_TRUSTED_CRAWLER_UA_HINTS);
+}
+
+function isTrustedCrawlerUserAgent(request, env, userAgent) {
+  const normalizedUa = sanitizeString(userAgent || request?.headers?.get("user-agent") || "", 500).toLowerCase();
+  if (!normalizedUa) return false;
+
+  const verifiedBot = request?.cf?.botManagement?.verifiedBot === true;
+  if (verifiedBot) return true;
+
+  const trustedHints = getTrustedCrawlerHints(env);
+  return trustedHints.some((hint) => hint && normalizedUa.includes(hint));
 }
 
 class HttpError extends Error {
@@ -473,6 +512,7 @@ async function respondWithEdgeCache(cacheKey, ttlSeconds, corsHeaders, ctx, prod
 
 function shouldBlockNoisyReadRequest(request) {
   const userAgent = sanitizeString(request.headers.get("user-agent") || "", 400).toLowerCase();
+  if (isTrustedCrawlerUserAgent(request, null, userAgent)) return false;
   const hardBotUa = /(adsbot|baiduspider|bingbot|bot|crawler|curl|duckduckbot|googlebot|headless|httpclient|lighthouse|playwright|prerender|puppeteer|python-requests|selenium|spider|wget|yandexbot)/i.test(userAgent);
   const cfRisk = applyCloudflareRiskSignals(request, 0, false, "low");
   if (cfRisk.cfThreatScore >= 40) return true;
@@ -641,7 +681,12 @@ function normalizeBotProtectionIntensity(value, fallback = cloneDefaultAdminSett
 
 function botProtectionThresholdFromIntensity(intensity) {
   const safeIntensity = normalizeBotProtectionIntensity(intensity);
-  return Number((0.95 - ((safeIntensity - 1) * 0.02)).toFixed(2));
+  return Number((0.9 - ((safeIntensity - 1) * 0.015)).toFixed(2));
+}
+
+function botProtectionChallengeThresholdFromIntensity(intensity) {
+  const safeIntensity = normalizeBotProtectionIntensity(intensity);
+  return Number((0.68 - ((safeIntensity - 1) * 0.025)).toFixed(2));
 }
 
 function normalizeAdminSettings(input) {
@@ -1087,6 +1132,7 @@ async function verifySignedRequestWithSecret(request, env, rawText, endpoint, se
 function looksLikeHardBotUserAgent(value) {
   const ua = sanitizeString(value, 500).toLowerCase();
   if (!ua) return false;
+  if (DEFAULT_TRUSTED_CRAWLER_UA_HINTS.some((hint) => ua.includes(hint))) return false;
   return /(adsbot|applebot|baiduspider|bingbot|bot|crawler|curl|duckduckbot|facebookexternalhit|googlebot|headlesschrome|httpclient|lighthouse|petalbot|phantomjs|playwright|prerender|puppeteer|python-requests|semrushbot|selenium|spider|wget|yandexbot)/i.test(ua);
 }
 
@@ -1125,6 +1171,7 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
   const botProtectionEnabled = settings.intent.botProtectionEnabled !== false;
   const botProtectionIntensity = normalizeBotProtectionIntensity(settings.intent.botProtectionIntensity);
   const botProtectionThreshold = botProtectionThresholdFromIntensity(botProtectionIntensity);
+  const challengeThreshold = botProtectionChallengeThresholdFromIntensity(botProtectionIntensity);
 
   const ua = sanitizeString(body.ua, 500);
   const source = sanitizeString(body.source, 80) || "edge";
@@ -1157,9 +1204,12 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
   let finalBotScore = Math.max(incomingScore, cfRisk.score, hardUa ? 0.95 : 0);
   finalBotScore = Number(Math.min(1, finalBotScore).toFixed(2));
 
-  const forcedHighConfidenceBot = hardUa || (incomingIsBot && incomingConfidence === "high") || (cfRisk.isBot && cfRisk.confidence === "high");
-  const finalIsBot = botProtectionEnabled && !isLegitimate && (forcedHighConfidenceBot || finalBotScore >= botProtectionThreshold);
-  const finalConfidence = finalIsBot ? "high" : "low";
+  const finalConfidence = finalBotScore >= botProtectionThreshold
+    ? "high"
+    : finalBotScore >= challengeThreshold
+      ? "medium"
+      : "low";
+  const finalIsBot = botProtectionEnabled && !isLegitimate && finalConfidence !== "low";
 
   if (!finalIsBot) {
     console.log("edge_bot_event:below_threshold");
@@ -1203,6 +1253,18 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
 
 function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidence) {
   const cf = request && request.cf ? request.cf : {};
+  const userAgent = sanitizeString(request?.headers?.get("user-agent") || "", 500);
+  if (isTrustedCrawlerUserAgent(request, null, userAgent)) {
+    return {
+      score: Number(baseScore) || 0,
+      isBot: false,
+      confidence: "low",
+      reasons: ["trusted_crawler"],
+      cfThreatScore: Number(cf.threatScore) || 0,
+      cfAsn: Number(cf.asn) || null,
+      cfAsOrganization: sanitizeString(cf.asOrganization, 140).toLowerCase() || null,
+    };
+  }
   let score = Number(baseScore) || 0;
   let isBot = baseIsBot === true;
   let confidence = baseConfidence === "high" ? "high" : "low";
@@ -1289,14 +1351,18 @@ async function handleStats(request, env, corsHeaders, ctx) {
   const botProtectionEnabled = settings.intent.botProtectionEnabled !== false;
   const botProtectionIntensity = normalizeBotProtectionIntensity(settings.intent.botProtectionIntensity);
   const botProtectionThreshold = botProtectionThresholdFromIntensity(botProtectionIntensity);
+  const challengeThreshold = botProtectionChallengeThresholdFromIntensity(botProtectionIntensity);
 
   // Cloudflare-native edge enrichment (threat score, botManagement, ASN/org hints, JA3/JA4).
   const cfRisk = applyCloudflareRiskSignals(request, botScore, isBot, confidence);
   const finalBotScore = cfRisk.score;
-  const forcedHighConfidenceBot = cfRisk.isBot && cfRisk.confidence === "high";
-  const finalIsBot = botProtectionEnabled && (forcedHighConfidenceBot || finalBotScore >= botProtectionThreshold);
-  const finalConfidence = finalIsBot ? "high" : "low";
-  const pixelProtected = finalIsBot && finalConfidence === "high" && !isLegitimate ? 1 : 0;
+  const finalConfidence = finalBotScore >= botProtectionThreshold
+    ? "high"
+    : finalBotScore >= challengeThreshold
+      ? "medium"
+      : "low";
+  const finalIsBot = botProtectionEnabled && finalConfidence !== "low";
+  const pixelProtected = finalIsBot && !isLegitimate ? 1 : 0;
 
   const envSampleRate = Number(env.HUMAN_VISIT_SAMPLE_RATE);
   const humanVisitSampleRate = Number.isFinite(envSampleRate)
@@ -1398,8 +1464,9 @@ async function handlePixelGuardEvent(request, env, corsHeaders, ctx) {
   const botProtectionEnabled = settings.intent.botProtectionEnabled !== false;
   const botProtectionIntensity = normalizeBotProtectionIntensity(settings.intent.botProtectionIntensity);
   const botProtectionThreshold = botProtectionThresholdFromIntensity(botProtectionIntensity);
+  const challengeThreshold = botProtectionChallengeThresholdFromIntensity(botProtectionIntensity);
 
-  if (!botProtectionEnabled || !isBot || (confidence !== "high" && botScore < botProtectionThreshold)) {
+  if (!botProtectionEnabled || !isBot || (confidence === "low" && botScore < challengeThreshold)) {
     return jsonResponse({ ok: true, accepted: false }, 200, corsHeaders);
   }
 
@@ -1608,7 +1675,7 @@ async function servePixelGuard(url, env) {
   return new Response(buildPixelGuardScript(shop, url.origin, reportOnly, enabled, intensity), {
     headers: {
       "Content-Type": "application/javascript; charset=utf-8",
-      "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600",
+      "Cache-Control": "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
       "X-Content-Type-Options": "nosniff",
     },
   });
@@ -1624,6 +1691,7 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled, intensity) {
     enabled: ${enabled ? "true" : "false"},
     reportOnly: ${reportOnly ? "true" : "false"},
     intensity: ${Number(intensity) || 5},
+    trustedCrawlerHints: ${JSON.stringify(DEFAULT_TRUSTED_CRAWLER_UA_HINTS)},
     version: "pixel-guard-v1"
   };
 
@@ -1643,8 +1711,12 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled, intensity) {
     const reasons = [];
     let score = 0;
     const protectionIntensity = Math.max(1, Math.min(10, Number(config.intensity) || 5));
-    const highConfidenceThreshold = Number((0.95 - ((protectionIntensity - 1) * 0.02)).toFixed(2));
+    const highConfidenceThreshold = Number((0.9 - ((protectionIntensity - 1) * 0.015)).toFixed(2));
+    const mediumConfidenceThreshold = Number((0.68 - ((protectionIntensity - 1) * 0.025)).toFixed(2));
     const lowerUa = ua.toLowerCase();
+    if (Array.isArray(config.trustedCrawlerHints) && config.trustedCrawlerHints.some((hint) => lowerUa.includes(String(hint || '').toLowerCase()))) {
+      return { isBot: false, confidence: "low", botScore: 0, reasons: ["trusted_crawler"] };
+    }
     const hardUa = /(adsbot|applebot|baiduspider|bingbot|bot|crawler|curl|duckduckbot|facebookexternalhit|googlebot|headlesschrome|httpclient|lighthouse|micromessenger|mmwebsdk|phantomjs|playwright|prerender|puppeteer|python-requests|semrushbot|selenium|spider|wget|weixin|xweb\/|yandexbot)/i.test(ua);
     const automationUa = /(headlesschrome|phantomjs|playwright|puppeteer|selenium|webdriver|jsdom)/i.test(ua);
 
@@ -1750,9 +1822,10 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled, intensity) {
 
     score = Math.min(1, score);
     const highConfidence = score >= highConfidenceThreshold;
+    const mediumConfidence = score >= mediumConfidenceThreshold;
     return {
-      isBot: highConfidence,
-      confidence: highConfidence ? "high" : "low",
+      isBot: mediumConfidence,
+      confidence: highConfidence ? "high" : mediumConfidence ? "medium" : "low",
       botScore: Number(score.toFixed(2)),
       reasons
     };
@@ -1763,7 +1836,7 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled, intensity) {
     active: true,
     version: config.version,
     reportOnly: config.reportOnly,
-    suppressing: decision.isBot && decision.confidence === "high" && !config.reportOnly,
+    suppressing: decision.isBot && decision.confidence !== "low" && !config.reportOnly,
     decision,
     suppressedPixels: 0
   };

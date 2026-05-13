@@ -731,8 +731,8 @@ async function saveAdminSettings(env, shop, partialSettings) {
   const nextIntent = normalizeAdminSettings({
     intent: { ...current.intent, ...(partialSettings.intent || {}) },
   });
-  const intentChanged = JSON.stringify(current.intent) !== JSON.stringify(nextIntent.intent);
-  const nextVersion = intentChanged ? (Number(current.pixelGuardVersion) || 1) + 1 : (Number(current.pixelGuardVersion) || 1);
+  const intensityChanged = Number(current.intent.botProtectionIntensity) !== Number(nextIntent.intent.botProtectionIntensity);
+  const nextVersion = intensityChanged ? (Number(current.pixelGuardVersion) || 1) + 1 : (Number(current.pixelGuardVersion) || 1);
   const next = {
     ...nextIntent,
     pixelGuardVersion: nextVersion,

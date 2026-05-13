@@ -184,7 +184,10 @@ export default {
         return await serveEmbeddedAdmin(url, request, ctx);
       }
       if (url.pathname === "/dashboard") {
-        return await serveDashboard(url, request, ctx);
+        return serveDashboard(url, request, ctx, env);
+      }
+      if (url.pathname === "/dashboard/login") {
+        return await handleDashboardLogin(request, env);
       }
       return new Response("Not found", { status: 404 });
     } catch (error) {
@@ -770,6 +773,149 @@ function normalizeAdminSettings(input) {
     pixelGuardIntensityVersion: Number.isFinite(intensityVersionSource) && intensityVersionSource > 0 ? Math.floor(intensityVersionSource) : 1,
     pixelGuardEnabledVersion: Number.isFinite(enabledVersionSource) && enabledVersionSource > 0 ? Math.floor(enabledVersionSource) : 1,
   };
+}
+
+function buildDashboardLoginHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Commerce Shield - Dashboard Login</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-container {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      padding: 40px;
+      width: 100%;
+      max-width: 400px;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    .subtitle {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 32px;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+    }
+    label {
+      font-weight: 600;
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 8px;
+    }
+    input[type="password"] {
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      transition: border-color 0.2s;
+    }
+    input[type="password"]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    button {
+      padding: 10px 16px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #5568d3;
+    }
+    .error {
+      color: #dc2626;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <h1>Commerce Shield</h1>
+    <p class="subtitle">Enter password to access dashboard</p>
+    <form method="POST" action="/dashboard/login">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" required autofocus>
+      <button type="submit">Login</button>
+    </form>
+  </div>
+</body>
+</html>`;
+}
+
+function isDashboardAuthenticated(request) {
+  const cookies = request.headers.get("cookie") || "";
+  return cookies.includes("dashboard_auth=true");
+}
+
+async function handleDashboardLogin(request, env) {
+  if (request.method !== "POST") {
+    return new Response(buildDashboardLoginHTML(), {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }
+
+  const configuredPassword = sanitizeString(env?.DASHBOARD_PASSWORD, 255);
+  if (!configuredPassword) {
+    // No password configured, allow access
+    return Response.redirect(new URL("/dashboard", request.url).toString(), 302);
+  }
+
+  try {
+    const body = await request.text();
+    const params = new URLSearchParams(body);
+    const submittedPassword = params.get("password") || "";
+
+    if (timingSafeEqualString(submittedPassword, configuredPassword)) {
+      // Password correct, set cookie and redirect
+      const redirectUrl = new URL("/dashboard", request.url).toString();
+      return new Response(null, {
+        status: 302,
+        headers: {
+          "Location": redirectUrl,
+          "Set-Cookie": "dashboard_auth=true; Path=/dashboard; HttpOnly; SameSite=Lax; Max-Age=86400",
+        },
+      });
+    } else {
+      // Password incorrect, show login with error
+      const html = buildDashboardLoginHTML().replace(
+        "<form method",
+        `<div class="error">Invalid password. Try again.</div><form method`
+      );
+      return new Response(html, {
+        status: 401,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    }
+  } catch (error) {
+    return new Response(buildDashboardLoginHTML(), {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }
 }
 
 async function getAdminSettings(env, shop) {
@@ -1752,7 +1898,17 @@ function serveEmbeddedAdmin(url, request, ctx) {
   });
 }
 
-function serveDashboard(url, request, ctx) {
+function serveDashboard(url, request, ctx, env) {
+  const configuredPassword = sanitizeString(env?.DASHBOARD_PASSWORD, 255);
+  const isAuthenticated = !configuredPassword || isDashboardAuthenticated(request);
+
+  if (!isAuthenticated) {
+    return new Response(buildDashboardLoginHTML(), {
+      status: 401,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }
+
   const shop = url.searchParams.get("shop") || "";
   const cacheKey = new Request(`https://cache.local/dashboard?shop=${encodeURIComponent(shop)}`, { method: "GET" });
   return respondWithEdgeCache(cacheKey, 120, OPEN_CORS_HEADERS, ctx, async () => {

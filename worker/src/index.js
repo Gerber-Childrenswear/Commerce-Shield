@@ -588,6 +588,21 @@ function requireWorkerAdmin(request, env) {
   }
 }
 
+function requireDashboardApiKey(request, env) {
+  const configuredKey = sanitizeString(env?.DASHBOARD_API_KEY, 500);
+  if (!configuredKey) return; // Not configured, allow all
+
+  const header = request.headers.get("authorization") || "";
+  if (!header.startsWith("Bearer ")) {
+    throw new HttpError("Missing or invalid Authorization header", 401);
+  }
+
+  const token = header.slice(7);
+  if (!timingSafeEqualString(token, configuredKey)) {
+    throw new HttpError("Invalid API key", 403);
+  }
+}
+
 function normalizeShopDomain(value) {
   const candidate = sanitizeString(value, 120).toLowerCase();
   return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(candidate) ? candidate : "";
@@ -1352,11 +1367,6 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
     return jsonResponse({ ok: true, accepted: false, reason: "below_threshold" }, 200, corsHeaders);
   }
 
-  // Alert on high-confidence bots
-  if (finalConfidence === "high") {
-    postBotAlertWebhook(env, ctx, shop, finalBotScore, finalConfidence, source, ua, page);
-  }
-
   console.log("edge_bot_event:writing");
   const today = new Date().toISOString().split("T")[0];
   await env.DB.prepare(
@@ -1511,21 +1521,11 @@ async function handleStats(request, env, corsHeaders, ctx) {
   const finalIsBot = botProtectionEnabled && finalConfidence !== "low";
   const pixelProtected = finalIsBot && !isLegitimate ? 1 : 0;
 
-  // Alert on high-confidence bots (from pixel guard events)
-  if (finalIsBot && finalConfidence === "high") {
-    postBotAlertWebhook(env, ctx, normalizedShop, finalBotScore, finalConfidence, source || "direct", ua, page);
-  }
-
   const envSampleRate = Number(env.HUMAN_VISIT_SAMPLE_RATE);
   const humanVisitSampleRate = Number.isFinite(envSampleRate)
     ? Math.min(1, Math.max(0, envSampleRate))
     : DEFAULT_HUMAN_VISIT_SAMPLE_RATE;
   const envSuspiciousThreshold = Number(env.SUSPICIOUS_VISIT_THRESHOLD);
-  const suspiciousThreshold = Number.isFinite(envSuspiciousThreshold)
-    ? Math.min(1, Math.max(0, envSuspiciousThreshold))
-    : DEFAULT_SUSPICIOUS_VISIT_THRESHOLD;
-
-  // Free-plan D1 optimization: keep detailed visit rows for bots/suspicious traffic,
   // sample low-risk humans, while keeping daily totals exact.
   const shouldPersistVisitRow =
     finalIsBot ||
@@ -1640,6 +1640,7 @@ async function handlePixelGuardEvent(request, env, corsHeaders, ctx) {
 }
 
 async function handleDashboardData(request, url, env, corsHeaders, ctx) {
+  requireDashboardApiKey(request, env);
   const shop = normalizeShopDomain(url.searchParams.get("shop"));
   const days = Math.min(90, Math.max(1, parseInt(url.searchParams.get("days") || "30", 10) || 30));
   if (!shop) throw new HttpError("Missing or invalid shop param", 400);
@@ -1703,6 +1704,7 @@ async function handleDashboardData(request, url, env, corsHeaders, ctx) {
 }
 
 async function handleRecentVisits(request, url, env, corsHeaders, ctx) {
+  requireDashboardApiKey(request, env);
   const shop = normalizeShopDomain(url.searchParams.get("shop"));
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 200);
   if (!shop) throw new HttpError("Missing or invalid shop param", 400);

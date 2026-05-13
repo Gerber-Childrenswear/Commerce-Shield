@@ -607,6 +607,42 @@ function isShopPaused(env, shop) {
   return getPausedShopSet(env).has(normalizedShop);
 }
 
+function getStorefrontDomain(env) {
+  return normalizeShopDomain(env?.STOREFRONT_DOMAIN || "");
+}
+
+function validateOriginAndReferer(request, env, shop) {
+  const storefrontDomain = getStorefrontDomain(env);
+  if (!storefrontDomain) return true; // No storefront domain configured, allow all
+
+  const origin = sanitizeString(request.headers.get("origin") || "", 255).toLowerCase();
+  const referer = sanitizeString(request.headers.get("referer") || "", 255).toLowerCase();
+  const workersUrl = sanitizeString(request.url, 255).toLowerCase();
+
+  // Allow if origin/referer match storefront domain
+  if (origin && origin.includes(storefrontDomain)) return true;
+  if (referer && referer.includes(storefrontDomain)) return true;
+
+  // Allow if origin is the workers.dev domain itself (same origin as this worker)
+  if (origin && origin.includes("workers.dev")) return true;
+  if (referer && referer.includes("workers.dev")) return true;
+
+  // Allow if no origin/referer (e.g. mobile, direct fetch, curl with no headers)
+  // This is intentionally permissive to avoid breaking legitimate mobile/app traffic
+  if (!origin && !referer) return true;
+
+  // Reject: origin/referer present but doesn't match storefront
+  if (origin || referer) {
+    console.log(
+      "origin_referer_blocked",
+      JSON.stringify({ origin: origin || "absent", referer: referer || "absent", shop })
+    );
+    return false;
+  }
+
+  return true;
+}
+
 function buildEmbeddedLaunchPath(shop, host) {
   const params = new URLSearchParams();
   params.set("embedded", "1");
@@ -1386,6 +1422,9 @@ async function handleStats(request, env, corsHeaders, ctx) {
   if (!shop) throw new HttpError("Missing shop", 400);
   const normalizedShop = normalizeShopDomain(shop);
   if (!normalizedShop) throw new HttpError("Invalid shop", 400);
+  if (!validateOriginAndReferer(request, env, normalizedShop)) {
+    return jsonResponse({ ok: false, error: "origin_mismatch" }, 403, corsHeaders);
+  }
   if (isShopPaused(env, normalizedShop)) {
     return jsonResponse({ ok: true, accepted: false, reason: "shop_paused" }, 200, corsHeaders);
   }
@@ -1496,6 +1535,9 @@ async function handlePixelGuardEvent(request, env, corsHeaders, ctx) {
   const { body } = await parseJsonRequest(request, 8 * 1024);
   const shop = normalizeShopDomain(body.shop);
   if (!shop) throw new HttpError("Missing shop", 400);
+  if (!validateOriginAndReferer(request, env, shop)) {
+    return jsonResponse({ ok: false, error: "origin_mismatch" }, 403, corsHeaders);
+  }
   if (isShopPaused(env, shop)) {
     return jsonResponse({ ok: true, accepted: false, reason: "shop_paused" }, 200, corsHeaders);
   }

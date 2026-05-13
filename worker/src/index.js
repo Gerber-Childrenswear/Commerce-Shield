@@ -27,6 +27,7 @@ const SHOPIFY_THEME_INSTALL_REQUIRED_SCOPES = ["read_themes", "write_themes"];
 const PIXEL_GUARD_MARKER = "Commerce Shield Pixel Guard";
 const DEFAULT_HUMAN_VISIT_SAMPLE_RATE = 0.05;
 const DEFAULT_SUSPICIOUS_VISIT_THRESHOLD = 0.35;
+const DEFAULT_PAUSED_SHOPS = [];
 const DEFAULT_TRUSTED_CRAWLER_UA_HINTS = [
   "brightedge",
   "powermapper",
@@ -590,6 +591,20 @@ function requireWorkerAdmin(request, env) {
 function normalizeShopDomain(value) {
   const candidate = sanitizeString(value, 120).toLowerCase();
   return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(candidate) ? candidate : "";
+}
+
+function getPausedShopSet(env) {
+  const parsed = parseHintList(env?.PAUSED_SHOPS || env?.PAUSED_SHOP_DOMAINS, DEFAULT_PAUSED_SHOPS);
+  const normalized = parsed
+    .map((entry) => normalizeShopDomain(entry))
+    .filter(Boolean);
+  return new Set(normalized);
+}
+
+function isShopPaused(env, shop) {
+  const normalizedShop = normalizeShopDomain(shop);
+  if (!normalizedShop) return false;
+  return getPausedShopSet(env).has(normalizedShop);
 }
 
 function buildEmbeddedLaunchPath(shop, host) {
@@ -1189,6 +1204,10 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
 
   const shop = normalizeShopDomain(body.shop);
   if (!shop) throw new HttpError("Missing or invalid shop", 400);
+  if (isShopPaused(env, shop)) {
+    console.log("edge_bot_event:shop_paused", shop);
+    return jsonResponse({ ok: true, accepted: false, reason: "shop_paused" }, 200, corsHeaders);
+  }
 
   const settings = await getAdminSettings(env, shop);
   const botProtectionEnabled = settings.intent.botProtectionEnabled !== false;
@@ -1367,6 +1386,9 @@ async function handleStats(request, env, corsHeaders, ctx) {
   if (!shop) throw new HttpError("Missing shop", 400);
   const normalizedShop = normalizeShopDomain(shop);
   if (!normalizedShop) throw new HttpError("Invalid shop", 400);
+  if (isShopPaused(env, normalizedShop)) {
+    return jsonResponse({ ok: true, accepted: false, reason: "shop_paused" }, 200, corsHeaders);
+  }
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -1474,6 +1496,9 @@ async function handlePixelGuardEvent(request, env, corsHeaders, ctx) {
   const { body } = await parseJsonRequest(request, 8 * 1024);
   const shop = normalizeShopDomain(body.shop);
   if (!shop) throw new HttpError("Missing shop", 400);
+  if (isShopPaused(env, shop)) {
+    return jsonResponse({ ok: true, accepted: false, reason: "shop_paused" }, 200, corsHeaders);
+  }
 
   const ip = extractIp(request);
   await applyRateLimit(env, "pixel_guard", `${shop}:${ip}`, PIXEL_GUARD_EVENT_LIMIT, 60);
@@ -1697,6 +1722,10 @@ async function servePixelGuard(url, env) {
     } catch {
       // Fail open with defaults if settings lookup fails.
     }
+  }
+
+  if (shop && isShopPaused(env, shop)) {
+    enabled = false;
   }
 
   const cacheVersion = `${intensityVersion}:${enabledVersion}:${enabled ? 1 : 0}:${intensity}:${reportOnly ? 1 : 0}`;

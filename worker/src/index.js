@@ -1145,6 +1145,64 @@ async function registerNonce(env, endpoint, nonce, timestamp) {
   }
 }
 
+async function postBotAlertWebhook(env, ctx, shop, botScore, confidence, source, ua, page) {
+  const webhookUrl = sanitizeString(env?.BOT_ALERT_WEBHOOK_URL, 2048);
+  if (!webhookUrl || !webhookUrl.startsWith("http")) return; // Not configured or invalid
+
+  const timestamp = new Date().toISOString();
+  const uaSample = sanitizeString(ua, 100);
+  const sourceSample = sanitizeString(source, 50);
+  const pageSample = sanitizeString(page, 100);
+
+  // Webhook payload — compatible with Slack, Discord, and generic JSON endpoints
+  const payload = {
+    timestamp,
+    shop,
+    event: "high_confidence_bot_detected",
+    botScore: Number(botScore) || 0,
+    confidence,
+    source: sourceSample || "direct",
+    ua: uaSample || "(unknown)",
+    page: pageSample || "/",
+  };
+
+  // Slack webhook format (backwards compatible with generic JSON)
+  const slackPayload = {
+    text: `🤖 High-confidence bot detected on ${shop}`,
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*High-Confidence Bot Detected* (${confidence})\nShop: ${shop}\nBot Score: ${botScore}\nSource: ${sourceSample || "direct"}\nPage: ${pageSample || "/"}\nUA: \`${uaSample || "(unknown)"}.\`\nTime: ${timestamp}`,
+        },
+      },
+    ],
+  };
+
+  if (ctx && typeof ctx.waitUntil === "function") {
+    // Non-blocking: fire webhook in background
+    ctx.waitUntil(
+      fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(slackPayload),
+      }).catch((error) => {
+        console.log("webhook_post_failed", error.message);
+      })
+    );
+  } else {
+    // Fallback: fire webhook but don't wait
+    fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(slackPayload),
+    }).catch((error) => {
+      console.log("webhook_post_failed", error.message);
+    });
+  }
+}
+
 async function pruneSecurityTables(env, ctx) {
   // Probabilistic cleanup — runs on ~1% of requests instead of every write.
   // Both tables are tiny and self-expiring, so frequent pruning adds no value.
@@ -1292,6 +1350,11 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
   if (!finalIsBot) {
     console.log("edge_bot_event:below_threshold");
     return jsonResponse({ ok: true, accepted: false, reason: "below_threshold" }, 200, corsHeaders);
+  }
+
+  // Alert on high-confidence bots
+  if (finalConfidence === "high") {
+    postBotAlertWebhook(env, ctx, shop, finalBotScore, finalConfidence, source, ua, page);
   }
 
   console.log("edge_bot_event:writing");
@@ -1447,6 +1510,11 @@ async function handleStats(request, env, corsHeaders, ctx) {
       : "low";
   const finalIsBot = botProtectionEnabled && finalConfidence !== "low";
   const pixelProtected = finalIsBot && !isLegitimate ? 1 : 0;
+
+  // Alert on high-confidence bots (from pixel guard events)
+  if (finalIsBot && finalConfidence === "high") {
+    postBotAlertWebhook(env, ctx, normalizedShop, finalBotScore, finalConfidence, source || "direct", ua, page);
+  }
 
   const envSampleRate = Number(env.HUMAN_VISIT_SAMPLE_RATE);
   const humanVisitSampleRate = Number.isFinite(envSampleRate)

@@ -693,14 +693,16 @@ function normalizeAdminSettings(input) {
   const defaults = cloneDefaultAdminSettings();
   const source = input && typeof input === "object" ? input : {};
   const intent = source.intent && typeof source.intent === "object" ? source.intent : {};
-  const versionSource = Number(source.pixelGuardVersion || intent.pixelGuardVersion);
+  const intensityVersionSource = Number(source.pixelGuardIntensityVersion || intent.pixelGuardIntensityVersion);
+  const enabledVersionSource = Number(source.pixelGuardEnabledVersion || intent.pixelGuardEnabledVersion);
 
   return {
     intent: {
       botProtectionEnabled: coerceBoolean(intent.botProtectionEnabled, defaults.intent.botProtectionEnabled),
       botProtectionIntensity: clampNumber(intent.botProtectionIntensity, defaults.intent.botProtectionIntensity, 1, 10),
     },
-    pixelGuardVersion: Number.isFinite(versionSource) && versionSource > 0 ? Math.floor(versionSource) : 1,
+    pixelGuardIntensityVersion: Number.isFinite(intensityVersionSource) && intensityVersionSource > 0 ? Math.floor(intensityVersionSource) : 1,
+    pixelGuardEnabledVersion: Number.isFinite(enabledVersionSource) && enabledVersionSource > 0 ? Math.floor(enabledVersionSource) : 1,
   };
 }
 
@@ -715,7 +717,8 @@ async function getAdminSettings(env, shop) {
   if (!row) {
     return {
       ...cloneDefaultAdminSettings(),
-      pixelGuardVersion: 1,
+      pixelGuardIntensityVersion: 1,
+      pixelGuardEnabledVersion: 1,
     };
   }
 
@@ -732,10 +735,11 @@ async function saveAdminSettings(env, shop, partialSettings) {
     intent: { ...current.intent, ...(partialSettings.intent || {}) },
   });
   const intensityChanged = Number(current.intent.botProtectionIntensity) !== Number(nextIntent.intent.botProtectionIntensity);
-  const nextVersion = intensityChanged ? (Number(current.pixelGuardVersion) || 1) + 1 : (Number(current.pixelGuardVersion) || 1);
+  const enabledChanged = Boolean(current.intent.botProtectionEnabled) !== Boolean(nextIntent.intent.botProtectionEnabled);
   const next = {
     ...nextIntent,
-    pixelGuardVersion: nextVersion,
+    pixelGuardIntensityVersion: intensityChanged ? (Number(current.pixelGuardIntensityVersion) || 1) + 1 : (Number(current.pixelGuardIntensityVersion) || 1),
+    pixelGuardEnabledVersion: enabledChanged ? (Number(current.pixelGuardEnabledVersion) || 1) + 1 : (Number(current.pixelGuardEnabledVersion) || 1),
   };
 
   await env.DB.prepare(
@@ -749,7 +753,11 @@ async function saveAdminSettings(env, shop, partialSettings) {
       updated_at = datetime('now')`
   ).bind(
     shop,
-    JSON.stringify({ ...next.intent, pixelGuardVersion: next.pixelGuardVersion }),
+    JSON.stringify({
+      ...next.intent,
+      pixelGuardIntensityVersion: next.pixelGuardIntensityVersion,
+      pixelGuardEnabledVersion: next.pixelGuardEnabledVersion,
+    }),
     JSON.stringify({}),
     JSON.stringify({}),
   ).run();
@@ -1671,7 +1679,8 @@ async function servePixelGuard(url, env) {
   const queryEnabled = url.searchParams.get("enabled") !== "0";
   let enabled = queryEnabled;
   let intensity = cloneDefaultAdminSettings().intent.botProtectionIntensity;
-  let settingsVersion = 1;
+  let intensityVersion = 1;
+  let enabledVersion = 1;
 
   if (shop && env?.DB) {
     try {
@@ -1683,13 +1692,14 @@ async function servePixelGuard(url, env) {
         1,
         10,
       );
-      settingsVersion = Number(settings.pixelGuardVersion) || 1;
+      intensityVersion = Number(settings.pixelGuardIntensityVersion) || 1;
+      enabledVersion = Number(settings.pixelGuardEnabledVersion) || 1;
     } catch {
       // Fail open with defaults if settings lookup fails.
     }
   }
 
-  const cacheVersion = `${settingsVersion}:${enabled ? 1 : 0}:${intensity}:${reportOnly ? 1 : 0}`;
+  const cacheVersion = `${intensityVersion}:${enabledVersion}:${enabled ? 1 : 0}:${intensity}:${reportOnly ? 1 : 0}`;
   const cacheKey = new Request(
     `https://cache.local/cs-pixel-guard.js?shop=${encodeURIComponent(shop || "")}&mode=${reportOnly ? "report" : "normal"}&enabled=${queryEnabled ? 1 : 0}&v=${encodeURIComponent(cacheVersion)}`,
     { method: "GET" },

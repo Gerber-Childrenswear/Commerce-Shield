@@ -704,17 +704,25 @@ function normalizeAdminSettings(input) {
 
 async function getAdminSettings(env, shop) {
   const row = await env.DB.prepare(
-    `SELECT intent_settings
+    `SELECT intent_settings, updated_at
      FROM admin_shop_settings
      WHERE shop = ?
      LIMIT 1`
   ).bind(shop).first();
 
-  if (!row) return cloneDefaultAdminSettings();
+  if (!row) {
+    return {
+      ...cloneDefaultAdminSettings(),
+      updatedAt: "",
+    };
+  }
 
-  return normalizeAdminSettings({
-    intent: safeJsonParse(row.intent_settings, {}),
-  });
+  return {
+    ...normalizeAdminSettings({
+      intent: safeJsonParse(row.intent_settings, {}),
+    }),
+    updatedAt: sanitizeString(row.updated_at, 40),
+  };
 }
 
 async function saveAdminSettings(env, shop, partialSettings) {
@@ -1656,6 +1664,7 @@ async function servePixelGuard(url, env) {
   const queryEnabled = url.searchParams.get("enabled") !== "0";
   let enabled = queryEnabled;
   let intensity = cloneDefaultAdminSettings().intent.botProtectionIntensity;
+  let settingsStamp = "";
 
   if (shop && env?.DB) {
     try {
@@ -1667,17 +1676,26 @@ async function servePixelGuard(url, env) {
         1,
         10,
       );
+      settingsStamp = sanitizeString(settings.updatedAt || "", 40);
     } catch {
       // Fail open with defaults if settings lookup fails.
     }
   }
 
-  return new Response(buildPixelGuardScript(shop, url.origin, reportOnly, enabled, intensity), {
-    headers: {
-      "Content-Type": "application/javascript; charset=utf-8",
-      "Cache-Control": "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
-      "X-Content-Type-Options": "nosniff",
-    },
+  const cacheVersion = settingsStamp || `${enabled ? 1 : 0}:${intensity}:${reportOnly ? 1 : 0}`;
+  const cacheKey = new Request(
+    `https://cache.local/cs-pixel-guard.js?shop=${encodeURIComponent(shop || "")}&mode=${reportOnly ? "report" : "normal"}&enabled=${queryEnabled ? 1 : 0}&v=${encodeURIComponent(cacheVersion)}`,
+    { method: "GET" },
+  );
+
+  return respondWithEdgeCache(cacheKey, 86400, OPEN_CORS_HEADERS, null, async () => {
+    return new Response(buildPixelGuardScript(shop, url.origin, reportOnly, enabled, intensity), {
+      headers: {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=0, s-maxage=86400, stale-while-revalidate=3600",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
   });
 }
 

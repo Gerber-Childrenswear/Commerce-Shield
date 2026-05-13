@@ -693,12 +693,14 @@ function normalizeAdminSettings(input) {
   const defaults = cloneDefaultAdminSettings();
   const source = input && typeof input === "object" ? input : {};
   const intent = source.intent && typeof source.intent === "object" ? source.intent : {};
+  const versionSource = Number(source.pixelGuardVersion || intent.pixelGuardVersion);
 
   return {
     intent: {
       botProtectionEnabled: coerceBoolean(intent.botProtectionEnabled, defaults.intent.botProtectionEnabled),
       botProtectionIntensity: clampNumber(intent.botProtectionIntensity, defaults.intent.botProtectionIntensity, 1, 10),
     },
+    pixelGuardVersion: Number.isFinite(versionSource) && versionSource > 0 ? Math.floor(versionSource) : 1,
   };
 }
 
@@ -713,7 +715,7 @@ async function getAdminSettings(env, shop) {
   if (!row) {
     return {
       ...cloneDefaultAdminSettings(),
-      updatedAt: "",
+      pixelGuardVersion: 1,
     };
   }
 
@@ -721,15 +723,20 @@ async function getAdminSettings(env, shop) {
     ...normalizeAdminSettings({
       intent: safeJsonParse(row.intent_settings, {}),
     }),
-    updatedAt: sanitizeString(row.updated_at, 40),
   };
 }
 
 async function saveAdminSettings(env, shop, partialSettings) {
   const current = await getAdminSettings(env, shop);
-  const next = normalizeAdminSettings({
+  const nextIntent = normalizeAdminSettings({
     intent: { ...current.intent, ...(partialSettings.intent || {}) },
   });
+  const intentChanged = JSON.stringify(current.intent) !== JSON.stringify(nextIntent.intent);
+  const nextVersion = intentChanged ? (Number(current.pixelGuardVersion) || 1) + 1 : (Number(current.pixelGuardVersion) || 1);
+  const next = {
+    ...nextIntent,
+    pixelGuardVersion: nextVersion,
+  };
 
   await env.DB.prepare(
     `INSERT INTO admin_shop_settings (
@@ -742,7 +749,7 @@ async function saveAdminSettings(env, shop, partialSettings) {
       updated_at = datetime('now')`
   ).bind(
     shop,
-    JSON.stringify(next.intent),
+    JSON.stringify({ ...next.intent, pixelGuardVersion: next.pixelGuardVersion }),
     JSON.stringify({}),
     JSON.stringify({}),
   ).run();
@@ -1664,7 +1671,7 @@ async function servePixelGuard(url, env) {
   const queryEnabled = url.searchParams.get("enabled") !== "0";
   let enabled = queryEnabled;
   let intensity = cloneDefaultAdminSettings().intent.botProtectionIntensity;
-  let settingsStamp = "";
+  let settingsVersion = 1;
 
   if (shop && env?.DB) {
     try {
@@ -1676,13 +1683,13 @@ async function servePixelGuard(url, env) {
         1,
         10,
       );
-      settingsStamp = sanitizeString(settings.updatedAt || "", 40);
+      settingsVersion = Number(settings.pixelGuardVersion) || 1;
     } catch {
       // Fail open with defaults if settings lookup fails.
     }
   }
 
-  const cacheVersion = settingsStamp || `${enabled ? 1 : 0}:${intensity}:${reportOnly ? 1 : 0}`;
+  const cacheVersion = `${settingsVersion}:${enabled ? 1 : 0}:${intensity}:${reportOnly ? 1 : 0}`;
   const cacheKey = new Request(
     `https://cache.local/cs-pixel-guard.js?shop=${encodeURIComponent(shop || "")}&mode=${reportOnly ? "report" : "normal"}&enabled=${queryEnabled ? 1 : 0}&v=${encodeURIComponent(cacheVersion)}`,
     { method: "GET" },

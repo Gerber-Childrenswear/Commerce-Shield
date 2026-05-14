@@ -2,26 +2,17 @@
 
 ## Current state
 
-This repository now contains the Shopify admin app shell (Express + web UI) and the Cloudflare Worker project.
+This repository contains the Shopify admin app shell (Express + web UI) and the Cloudflare Worker project used for production.
 
 The deployed URL used by this app is:
 
-- https://commerce-shield.ncassidy.workers.dev
+- https://commerce-shield-prod.ncassidy.workers.dev
 
 ## Confirmed Worker entrypoint
 
-The Worker project was located in local staging copies at:
+The active Worker entrypoint is:
 
-- `C:/Users/NCassidy/Downloads/gerberchildrenswear-ncassidy-staging-main/apps/commerce-shield/worker`
-- `C:/Users/NCassidy/Downloads/gerberchildrenswear-ncassidy-staging-main/gcw-dev/gcw-dev/apps/commerce-shield/worker`
-
-In both places, the Wrangler config sets:
-
-- `main = "src/index.js"`
-
-So the active Worker entrypoint is:
-
-- `src/index.js` (JavaScript), **not** `src/worker.ts`.
+- `src/index.js` (JavaScript), as set by `main = "src/index.js"` in `worker/wrangler.toml`.
 
 ## Source-of-truth paths in this repo
 
@@ -34,7 +25,7 @@ So the active Worker entrypoint is:
 
 ## Why this matters
 
-If we only edit this repository, Worker production behavior at `commerce-shield.ncassidy.workers.dev` may not change unless the Worker project source is also updated and deployed.
+Edits in this repository affect production behavior after a deploy from this repository (`npm run worker:deploy`).
 
 ## Worker runbook
 
@@ -47,7 +38,7 @@ If we only edit this repository, Worker production behavior at `commerce-shield.
 ## Recommended next steps
 
 1. Add CI job that validates and deploys `worker/` from this repository.
-2. Add environment-specific Wrangler configs if staging/prod split is needed.
+2. Keep this workspace production-only and avoid reintroducing dev-store app URLs in docs/config.
 3. Optionally migrate `worker/src/index.js` to TypeScript and set `main` accordingly.
 
 ## Quick verification checklist

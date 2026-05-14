@@ -6,7 +6,7 @@ Embedded Shopify admin app for bot protection, discount config, MRI engine, and 
 
 - **Backend:** Express.js server (`server.js`) — port 4000
 - **Frontend:** React + Vite + TypeScript (`web/`)
-- **Deploy:** Cloudflare Workers at `https://commerce-shield.ncassidy.workers.dev/`
+- **Deploy:** Cloudflare Workers at `https://commerce-shield-prod.ncassidy.workers.dev/`
 - **API Version:** Shopify Admin API 2025-10
 
 ## Features
@@ -22,7 +22,7 @@ Embedded Shopify admin app for bot protection, discount config, MRI engine, and 
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `SHOPIFY_STORE_DOMAIN` | Yes | e.g. `gcw-dev.myshopify.com` |
+| `SHOPIFY_STORE_DOMAIN` | Yes | e.g. `gerberchildrenswear.myshopify.com` |
 | `SHOPIFY_ADMIN_API_ACCESS_TOKEN` | Yes | Admin API access token |
 | `SHOPIFY_SHOP_ID` | Yes | Numeric shop ID for metafield owner |
 | `COMMERCE_SHIELD_ADMIN_TOKEN` | Recommended | Bearer token for admin API auth |
@@ -37,7 +37,7 @@ Embedded Shopify admin app for bot protection, discount config, MRI engine, and 
 
 ```powershell
 npm install
-$env:SHOPIFY_STORE_DOMAIN = 'gcw-dev.myshopify.com'
+$env:SHOPIFY_STORE_DOMAIN = 'gerberchildrenswear.myshopify.com'
 $env:SHOPIFY_ADMIN_API_ACCESS_TOKEN = '<token>'
 $env:COMMERCE_SHIELD_ADMIN_TOKEN = '<admin-secret>'
 npm start
@@ -57,7 +57,7 @@ The Worker source of truth now lives in this repo at:
 Commerce Shield enforces pixel suppression through the Worker-served storefront guard:
 
 ```html
-<script src="https://commerce-shield.ncassidy.workers.dev/cs-pixel-guard.js?shop=gcw-dev.myshopify.com"></script>
+<script src="https://commerce-shield-prod.ncassidy.workers.dev/cs-pixel-guard.js?shop=gerberchildrenswear.myshopify.com"></script>
 ```
 
 Place this as high in the theme `<head>` as possible, before Meta/Google/TikTok/Pinterest/Snap/Bing/Reddit/Cloudflare analytics pixels. The guard fails open for normal shoppers and uncertain sessions. It only suppresses known marketing/analytics pixel calls when the browser is a high-confidence bot or automation session.
@@ -67,7 +67,7 @@ The embedded Commerce Shield admin includes an **Install Pixel Guard** button. I
 For a dry run that makes no suppression changes, use:
 
 ```html
-<script src="https://commerce-shield.ncassidy.workers.dev/cs-pixel-guard.js?shop=gcw-dev.myshopify.com&mode=report"></script>
+<script src="https://commerce-shield-prod.ncassidy.workers.dev/cs-pixel-guard.js?shop=gerberchildrenswear.myshopify.com&mode=report"></script>
 ```
 
 ### Worker Commands
@@ -100,6 +100,6 @@ $env:CLOUDFLARE_WORKER_NAME = 'commerce-shield-prod' # optional
 
 ## Deployment Workflow
 
-1. All changes land in `ncassidy233/commerce-shield` first
-2. Test and review
-3. When approved, push to `Gerber-Childrenswear/gcw-dev` → `apps/gcw-admin/`
+1. Make and validate changes in this repository
+2. Deploy Worker from this repository with `npm run worker:deploy`
+3. Confirm Shopify app URLs in `shopify.app.toml` remain pointed to `commerce-shield-prod`

@@ -42,6 +42,9 @@ const DEFAULT_TRUSTED_CRAWLER_UA_HINTS = [
   "siteimprove",
   "contentking",
 ];
+const DEFAULT_TRUSTED_CRAWLER_SOURCE_HINTS = [
+  "gtm-server",
+];
 const DATACENTER_ASNS = new Set([
   // Major cloud/datacenter providers frequently used by scraping traffic.
   14618, 16509, 8075, 15169, 19527, 20473, 396982, 45102,
@@ -61,13 +64,13 @@ const KNOWN_BAD_JA3 = new Set([
 const DEFAULT_ADMIN_SETTINGS = Object.freeze({
   intent: {
     botProtectionEnabled: true,
-    botProtectionIntensity: 5,
+    botProtectionIntensity: 7,
   },
 });
 
-// Sources that must never write to D1 or appear in dashboards (e.g. server-side GTM noise).
+// Sources that must never write to D1 or appear in dashboards.
 // Override via BLOCKED_EVENT_SOURCES env var (comma-separated list).
-const DEFAULT_BLOCKED_EVENT_SOURCES = ["gtm-server"];
+const DEFAULT_BLOCKED_EVENT_SOURCES = [];
 
 function parseBlockedEventSources(env) {
   const raw = sanitizeString(env?.BLOCKED_EVENT_SOURCES, 500);
@@ -99,6 +102,17 @@ function parseHintList(value, fallback = []) {
 
 function getTrustedCrawlerHints(env) {
   return parseHintList(env?.TRUSTED_CRAWLER_UA_HINTS, DEFAULT_TRUSTED_CRAWLER_UA_HINTS);
+}
+
+function getTrustedCrawlerSourceHints(env) {
+  return parseHintList(env?.TRUSTED_CRAWLER_SOURCE_HINTS, DEFAULT_TRUSTED_CRAWLER_SOURCE_HINTS);
+}
+
+function isTrustedCrawlerSource(source, env) {
+  const normalizedSource = sanitizeString(source, 120).toLowerCase();
+  if (!normalizedSource) return false;
+  const trustedHints = getTrustedCrawlerSourceHints(env);
+  return trustedHints.some((hint) => hint && normalizedSource.includes(hint));
 }
 
 function isTrustedCrawlerUserAgent(request, env, userAgent) {
@@ -611,6 +625,11 @@ function normalizeShopDomain(value) {
   return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(candidate) ? candidate : "";
 }
 
+function normalizeHostName(value) {
+  const candidate = sanitizeString(value, 255).toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  return /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(candidate) ? candidate : "";
+}
+
 function getPausedShopSet(env) {
   const parsed = parseHintList(env?.PAUSED_SHOPS || env?.PAUSED_SHOP_DOMAINS, DEFAULT_PAUSED_SHOPS);
   const normalized = parsed
@@ -625,21 +644,24 @@ function isShopPaused(env, shop) {
   return getPausedShopSet(env).has(normalizedShop);
 }
 
-function getStorefrontDomain(env) {
-  return normalizeShopDomain(env?.STOREFRONT_DOMAIN || "");
+function getStorefrontDomains(env) {
+  const parsed = parseHintList(env?.STOREFRONT_DOMAINS || env?.STOREFRONT_DOMAIN, []);
+  const normalized = parsed
+    .map((entry) => normalizeHostName(entry) || normalizeShopDomain(entry))
+    .filter(Boolean);
+  return normalized;
 }
 
 function validateOriginAndReferer(request, env, shop) {
-  const storefrontDomain = getStorefrontDomain(env);
-  if (!storefrontDomain) return true; // No storefront domain configured, allow all
+  const storefrontDomains = getStorefrontDomains(env);
+  if (!storefrontDomains.length) return true; // No storefront domain configured, allow all
 
   const origin = sanitizeString(request.headers.get("origin") || "", 255).toLowerCase();
   const referer = sanitizeString(request.headers.get("referer") || "", 255).toLowerCase();
-  const workersUrl = sanitizeString(request.url, 255).toLowerCase();
 
   // Allow if origin/referer match storefront domain
-  if (origin && origin.includes(storefrontDomain)) return true;
-  if (referer && referer.includes(storefrontDomain)) return true;
+  if (origin && storefrontDomains.some((domain) => origin.includes(domain))) return true;
+  if (referer && storefrontDomains.some((domain) => referer.includes(domain))) return true;
 
   // Allow if origin is the workers.dev domain itself (same origin as this worker)
   if (origin && origin.includes("workers.dev")) return true;
@@ -1442,7 +1464,7 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
   // Fast-path reject for denylisted sources (e.g. gtm-server). Returns BEFORE
   // signature verification and nonce write so the request consumes minimal D1 work.
   const rawSource = sanitizeString(body.source, 80);
-  if (isBlockedEventSource(env, rawSource)) {
+  if (isBlockedEventSource(env, rawSource) && !isTrustedCrawlerSource(rawSource, env)) {
     console.log("edge_bot_event:blocked_source", sanitizeString(rawSource, 80));
     return jsonResponse({ ok: true, accepted: false, reason: "blocked_source" }, 200, corsHeaders);
   }
@@ -1478,25 +1500,19 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
   const incomingConfidence = sanitizeString(body.confidence, 20).toLowerCase() || "low";
   const incomingIsBot = body.isBot === true;
   const hardUa = looksLikeHardBotUserAgent(ua);
-  const isGtmServerSource = source === "gtm-server";
-  const cfRisk = isGtmServerSource
+  const trustedCrawlerSource = isTrustedCrawlerSource(source, env);
+  const effectiveIsLegitimate = isLegitimate || trustedCrawlerSource;
+  const cfRisk = trustedCrawlerSource
     ? {
       score: incomingScore,
       isBot: incomingIsBot,
       confidence: incomingConfidence === "high" ? "high" : "low",
-      reasons: ["cf_risk_skipped_gtm_server"],
+      reasons: ["cf_risk_skipped_trusted_crawler_source"],
       cfThreatScore: null,
       cfAsn: null,
       cfAsOrganization: null,
     }
     : applyCloudflareRiskSignals(request, incomingScore, incomingIsBot, incomingConfidence);
-
-  // Server-side GTM calls originate from datacenter infrastructure.
-  // Do not classify as bot unless payload itself carries explicit bot evidence.
-  if (isGtmServerSource && !hardUa && !incomingIsBot && incomingScore < botProtectionThreshold) {
-    console.log("edge_bot_event:gtm_server_no_signal");
-    return jsonResponse({ ok: true, accepted: false, reason: "gtm_server_no_signal" }, 200, corsHeaders);
-  }
 
   let finalBotScore = Math.max(incomingScore, cfRisk.score, hardUa ? 0.95 : 0);
   finalBotScore = Number(Math.min(1, finalBotScore).toFixed(2));
@@ -1506,41 +1522,64 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
     : finalBotScore >= challengeThreshold
       ? "medium"
       : "low";
-  const finalIsBot = botProtectionEnabled && !isLegitimate && finalConfidence !== "low";
+  const finalIsBot = botProtectionEnabled && !effectiveIsLegitimate && finalConfidence !== "low";
 
-  if (!finalIsBot) {
+  if (!finalIsBot && !effectiveIsLegitimate) {
     console.log("edge_bot_event:below_threshold");
     return jsonResponse({ ok: true, accepted: false, reason: "below_threshold" }, 200, corsHeaders);
   }
 
-  console.log("edge_bot_event:writing");
+  const persistedConfidence = effectiveIsLegitimate
+    ? incomingConfidence === "high"
+      ? "high"
+      : incomingConfidence === "medium"
+        ? "medium"
+        : "low"
+    : finalConfidence;
+  const persistedBotScore = effectiveIsLegitimate ? incomingScore : finalBotScore;
+
+  console.log(effectiveIsLegitimate ? "edge_bot_event:writing_legitimate" : "edge_bot_event:writing");
   const today = new Date().toISOString().split("T")[0];
   await env.DB.prepare(
     `INSERT INTO visits (shop, is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua)
-     VALUES (?, 1, ?, ?, ?, ?, 0, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
   ).bind(
     shop,
-    finalBotScore,
-    finalConfidence,
+    finalIsBot ? 1 : 0,
+    persistedBotScore,
+    persistedConfidence,
     body.isMobile === true ? 1 : 0,
-    isLegitimate ? 1 : 0,
+    effectiveIsLegitimate ? 1 : 0,
     source,
     page,
     ua,
   ).run();
 
   await env.DB.prepare(
-    `INSERT INTO daily_stats (shop, date, total_visits, human_visits, bot_visits, coupon_bots, pixels_protected)
-     VALUES (?, ?, 1, 0, 1, 0, ?)
+    `INSERT INTO daily_stats (shop, date, total_visits, human_visits, bot_visits, coupon_bots, pixels_protected, allowed_crawlers)
+     VALUES (?, ?, ?, 0, ?, 0, ?, ?)
      ON CONFLICT(shop, date) DO UPDATE SET
-       total_visits = total_visits + 1,
-       bot_visits = bot_visits + 1,
-       pixels_protected = pixels_protected + ?`
-  ).bind(shop, today, finalConfidence === "high" ? 1 : 0, finalConfidence === "high" ? 1 : 0).run();
+       total_visits = total_visits + ?,
+       bot_visits = bot_visits + ?,
+       pixels_protected = pixels_protected + ?,
+       allowed_crawlers = allowed_crawlers + ?`
+  ).bind(
+    shop,
+    today,
+    effectiveIsLegitimate ? 0 : 1,
+    finalIsBot ? 1 : 0,
+    finalIsBot && finalConfidence === "high" ? 1 : 0,
+    effectiveIsLegitimate ? 1 : 0,
+    effectiveIsLegitimate ? 0 : 1,
+    finalIsBot ? 1 : 0,
+    finalIsBot && finalConfidence === "high" ? 1 : 0,
+    effectiveIsLegitimate ? 1 : 0,
+  ).run();
 
   return jsonResponse({
     ok: true,
-    accepted: true,
+    accepted: finalIsBot,
+    segmented: effectiveIsLegitimate ? "allowed_crawler" : null,
     shop,
     botScore: finalBotScore,
     confidence: finalConfidence,
@@ -1664,8 +1703,18 @@ async function handleStats(request, env, corsHeaders, ctx) {
     : finalBotScore >= challengeThreshold
       ? "medium"
       : "low";
-  const finalIsBot = botProtectionEnabled && finalConfidence !== "low";
-  const pixelProtected = finalIsBot && !isLegitimate ? 1 : 0;
+  const sourceValue = sanitizeString(source, 80) || "direct";
+  const uaValue = sanitizeString(ua, 200);
+  const effectiveIsLegitimate =
+    isLegitimate === true ||
+    isTrustedCrawlerSource(sourceValue, env) ||
+    isTrustedCrawlerUserAgent(request, env, uaValue);
+  const finalIsBot = botProtectionEnabled && !effectiveIsLegitimate && finalConfidence !== "low";
+  const pixelProtected = finalIsBot ? 1 : 0;
+  const countedVisit = effectiveIsLegitimate ? 0 : 1;
+  const humanVisit = countedVisit && !finalIsBot ? 1 : 0;
+  const botVisit = countedVisit && finalIsBot ? 1 : 0;
+  const allowedCrawlerVisit = effectiveIsLegitimate ? 1 : 0;
 
   const envSampleRate = Number(env.HUMAN_VISIT_SAMPLE_RATE);
   const humanVisitSampleRate = Number.isFinite(envSampleRate)
@@ -1683,25 +1732,30 @@ async function handleStats(request, env, corsHeaders, ctx) {
   // Batch writes into one round-trip. `daily_stats` is always exact.
   const statements = [
     env.DB.prepare(
-      `INSERT INTO daily_stats (shop, date, total_visits, human_visits, bot_visits, coupon_bots, pixels_protected)
-       VALUES (?, ?, 1, ?, ?, ?, ?)
+      `INSERT INTO daily_stats (shop, date, total_visits, human_visits, bot_visits, coupon_bots, pixels_protected, allowed_crawlers)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(shop, date) DO UPDATE SET
-         total_visits = total_visits + 1,
+         total_visits = total_visits + ?,
          human_visits = human_visits + ?,
          bot_visits = bot_visits + ?,
          coupon_bots = coupon_bots + ?,
-         pixels_protected = pixels_protected + ?`
+         pixels_protected = pixels_protected + ?,
+         allowed_crawlers = allowed_crawlers + ?`
     ).bind(
       normalizedShop,
       today,
-      finalIsBot ? 0 : 1,
-      finalIsBot ? 1 : 0,
+      countedVisit,
+      humanVisit,
+      botVisit,
       isCouponBot ? 1 : 0,
       pixelProtected,
-      finalIsBot ? 0 : 1,
-      finalIsBot ? 1 : 0,
+      allowedCrawlerVisit,
+      countedVisit,
+      humanVisit,
+      botVisit,
       isCouponBot ? 1 : 0,
       pixelProtected,
+      allowedCrawlerVisit,
     ),
   ];
 
@@ -1716,11 +1770,11 @@ async function handleStats(request, env, corsHeaders, ctx) {
         Number(finalBotScore) || 0,
         sanitizeString(finalConfidence, 20) || "low",
         isMobile ? 1 : 0,
-        isLegitimate ? 1 : 0,
+        effectiveIsLegitimate ? 1 : 0,
         isCouponBot ? 1 : 0,
-        sanitizeString(source, 80) || "direct",
+        sourceValue,
         sanitizeString(page, 500),
-        sanitizeString(ua, 200),
+        uaValue,
       )
     );
   }
@@ -1805,7 +1859,7 @@ async function handleDashboardData(request, url, env, corsHeaders, ctx) {
   const sinceStr = since.toISOString().split("T")[0];
 
   const stats = await env.DB.prepare(
-    `SELECT date, total_visits, human_visits, bot_visits, coupon_bots, pixels_protected, disposable_emails_blocked
+    `SELECT date, total_visits, human_visits, bot_visits, coupon_bots, pixels_protected, disposable_emails_blocked, allowed_crawlers
      FROM daily_stats WHERE shop = ? AND date >= ? ORDER BY date ASC`
   ).bind(shop, sinceStr).all();
 
@@ -1816,25 +1870,38 @@ async function handleDashboardData(request, url, env, corsHeaders, ctx) {
        COALESCE(SUM(bot_visits), 0) as botVisits,
        COALESCE(SUM(coupon_bots), 0) as couponBots,
        COALESCE(SUM(pixels_protected), 0) as pixelsProtected,
-       COALESCE(SUM(disposable_emails_blocked), 0) as disposableEmailsBlocked
+       COALESCE(SUM(disposable_emails_blocked), 0) as disposableEmailsBlocked,
+       COALESCE(SUM(allowed_crawlers), 0) as allowedCrawlers
      FROM daily_stats WHERE shop = ? AND date >= ?`
   ).bind(shop, sinceStr).first();
 
-  // Defensive UI filter: never surface denylisted sources (e.g. gtm-server) in dashboards.
   const sources = await env.DB.prepare(
-    `SELECT source, COUNT(*) as count, SUM(is_bot) as bots
+    `SELECT
+       source,
+       COUNT(*) as count,
+       SUM(CASE WHEN is_bot = 1 THEN 1 ELSE 0 END) as bots,
+       SUM(CASE WHEN is_legitimate = 1 THEN 1 ELSE 0 END) as allowedCrawlers
      FROM visits WHERE shop = ? AND created_at >= datetime(?)
        AND source IS NOT NULL
-       AND LOWER(source) NOT LIKE 'gtm-server%'
+     GROUP BY source ORDER BY count DESC LIMIT 10`
+  ).bind(shop, sinceStr + "T00:00:00").all();
+
+  const allowedCrawlerSources = await env.DB.prepare(
+    `SELECT
+       source,
+       COUNT(*) as count,
+       MAX(created_at) as lastSeen,
+       MAX(ua) as sampleUa
+     FROM visits WHERE shop = ? AND created_at >= datetime(?) AND is_legitimate = 1
      GROUP BY source ORDER BY count DESC LIMIT 10`
   ).bind(shop, sinceStr + "T00:00:00").all();
 
   const botTypes = await env.DB.prepare(
     `SELECT
        SUM(CASE WHEN is_coupon_bot = 1 THEN 1 ELSE 0 END) as couponBots,
-       SUM(CASE WHEN is_legitimate = 1 THEN 1 ELSE 0 END) as legitimateBots,
+       SUM(CASE WHEN is_legitimate = 1 THEN 1 ELSE 0 END) as allowedCrawlers,
        SUM(CASE WHEN is_bot = 1 AND is_coupon_bot = 0 AND is_legitimate = 0 THEN 1 ELSE 0 END) as badBots,
-       SUM(CASE WHEN is_bot = 0 THEN 1 ELSE 0 END) as humans
+       SUM(CASE WHEN is_bot = 0 AND is_legitimate = 0 THEN 1 ELSE 0 END) as humans
      FROM visits WHERE shop = ? AND created_at >= datetime(?)`
   ).bind(shop, sinceStr + "T00:00:00").first();
 
@@ -1842,6 +1909,7 @@ async function handleDashboardData(request, url, env, corsHeaders, ctx) {
       dailyStats: stats.results || [],
       totals: totals || {},
       sources: sources.results || [],
+      allowedCrawlerSources: allowedCrawlerSources.results || [],
       botTypes: botTypes || {},
     }, 200, corsHeaders, {
       "Cache-Control": "public, max-age=0, s-maxage=45, stale-while-revalidate=180",
@@ -1862,19 +1930,21 @@ async function handleRecentVisits(request, url, env, corsHeaders, ctx) {
   await applyRateLimit(env, "recent_read", `${shop}:${ip}`, RECENT_READ_LIMIT, 60);
 
   const botsOnly = url.searchParams.get("bots") !== "0";
+  const segment = sanitizeString(url.searchParams.get("segment"), 32).toLowerCase();
 
-  const cacheKey = buildReadCacheKey("/api/recent", shop, { limit, bots: botsOnly ? 1 : 0 });
+  const cacheKey = buildReadCacheKey("/api/recent", shop, { limit, bots: botsOnly ? 1 : 0, segment });
   return respondWithEdgeCache(cacheKey, 20, corsHeaders, ctx, async () => {
-    // Defensive UI filter: hide denylisted sources from Recent Visits.
     const recent = await env.DB.prepare(
-      botsOnly
+      segment === "allowed-crawlers"
         ? `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
-           FROM visits WHERE shop = ? AND is_bot = 1
-             AND (source IS NULL OR LOWER(source) NOT LIKE 'gtm-server%')
+           FROM visits WHERE shop = ? AND is_legitimate = 1
+           ORDER BY id DESC LIMIT ?`
+        : botsOnly
+        ? `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
+           FROM visits WHERE shop = ? AND (is_bot = 1 OR is_legitimate = 1)
            ORDER BY id DESC LIMIT ?`
         : `SELECT is_bot, bot_score, confidence, is_mobile, is_legitimate, is_coupon_bot, source, page, ua, created_at
            FROM visits WHERE shop = ?
-             AND (source IS NULL OR LOWER(source) NOT LIKE 'gtm-server%')
            ORDER BY id DESC LIMIT ?`
     ).bind(shop, limit).all();
 
@@ -2022,7 +2092,7 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled, intensity) {
     apiBase: ${JSON.stringify(origin)},
     enabled: ${enabled ? "true" : "false"},
     reportOnly: ${reportOnly ? "true" : "false"},
-    intensity: ${Number(intensity) || 5},
+    intensity: ${Number(intensity) || 7},
     trustedCrawlerHints: ${JSON.stringify(DEFAULT_TRUSTED_CRAWLER_UA_HINTS)},
     version: "pixel-guard-v1"
   };
@@ -2042,7 +2112,7 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled, intensity) {
   function classifyVisitor() {
     const reasons = [];
     let score = 0;
-    const protectionIntensity = Math.max(1, Math.min(10, Number(config.intensity) || 5));
+    const protectionIntensity = Math.max(1, Math.min(10, Number(config.intensity) || 7));
     const highConfidenceThreshold = Number((0.9 - ((protectionIntensity - 1) * 0.015)).toFixed(2));
     const mediumConfidenceThreshold = Number((0.68 - ((protectionIntensity - 1) * 0.025)).toFixed(2));
     const lowerUa = ua.toLowerCase();
@@ -2073,45 +2143,48 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled, intensity) {
       reasons.push("empty_languages");
     }
 
-    // Frozen/stale Chrome version — real Chrome auto-updates.
-    // Chrome < 130 = 18+ months out of date (shipped Sep 2024).
+    // Frozen/stale Chrome version — real Chrome auto-updates, but enterprise
+    // managed installs, locked-down kiosks, and embedded webviews legitimately
+    // run older versions. Treat as a soft signal only.
     const chromeVerMatch = ua.match(/Chrome\/(\d+)\./);
     if (chromeVerMatch) {
       const chromeVer = parseInt(chromeVerMatch[1], 10);
-      if (chromeVer < 100) {
-        score = Math.max(score, 0.92);
+      if (chromeVer < 80) {
+        score += 0.18;
         reasons.push("stale_chrome_version");
-      } else if (chromeVer < 130) {
-        score += 0.35;
+      } else if (chromeVer < 110) {
+        score += 0.08;
         reasons.push("stale_chrome_version");
       }
     }
 
     // --- Browser environment fingerprinting ---
     // Real Chrome always exposes window.chrome. Headless/Playwright/Puppeteer
-    // often omit it or have an incomplete stub.
+    // often omit it or have an incomplete stub. Some embedded webviews also
+    // strip it, so keep as a contributing signal rather than dominant.
     if (/Chrome\//i.test(ua) && !lowerUa.includes('chromium')) {
       if (typeof window.chrome === 'undefined' || window.chrome === null) {
-        score += 0.35;
+        score += 0.18;
         reasons.push("chrome_ua_no_chrome_obj");
       }
     }
 
-    // Headless Chrome has zero plugins. Real Chrome always has at least one
-    // (PDF viewer). Only applies to desktop UA strings, not mobile.
+    // Modern Chrome frequently exposes zero plugins by default; this is no
+    // longer a reliable bot signal on its own. Keep as a small contributor.
     try {
       if (navigator.plugins && navigator.plugins.length === 0 &&
           /Chrome|Safari/i.test(ua) && !/Mobile|Android|iPhone|iPad/i.test(ua)) {
-        score += 0.3;
+        score += 0.08;
         reasons.push("no_plugins");
       }
     } catch {}
 
-    // outerWidth/outerHeight are 0 in headless Chrome unless explicitly set.
+    // outerWidth/outerHeight are 0 in headless Chrome unless explicitly set —
+    // but they are also 0 in some in-app webviews and restored tabs. Soft signal.
     try {
       if (typeof window.outerWidth !== 'undefined' &&
           window.outerWidth === 0 && window.outerHeight === 0) {
-        score += 0.35;
+        score += 0.15;
         reasons.push("zero_outer_dimensions");
       }
     } catch {}
@@ -2460,7 +2533,7 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled, intensity) {
   // install suppression, report as bot. If interaction detected and we were
   // provisionally suppressing → restore native network functions.
   (function setupBehavioralCheck() {
-    const protectionIntensity = Math.max(1, Math.min(10, Number(config.intensity) || 5));
+    const protectionIntensity = Math.max(1, Math.min(10, Number(config.intensity) || 7));
     const highConfidenceThreshold = Number((0.95 - ((protectionIntensity - 1) * 0.02)).toFixed(2));
     const behavioralBoost = Number((0.45 + ((protectionIntensity - 1) * 0.03)).toFixed(2));
     let interacted = false;
@@ -2602,6 +2675,7 @@ function renderDashboard(dash, recent) {
   html += statCard('sessions', 'Sessions', fmt(totalVisits));
   html += statCard('humans', 'Humans', fmt(t.humanVisits || 0));
   html += statCard('bots', 'Bots Detected', fmt(t.botVisits || 0));
+  html += statCard('crawlers', 'Allowed Crawlers', fmt(t.allowedCrawlers || 0));
   html += statCard('rate', 'Bot Rate', botRate + '%');
   html += statCard('coupon', 'Coupon Bots', fmt(t.couponBots || 0));
   html += statCard('pixels', 'Pixels Protected', fmt(t.pixelsProtected || 0));
@@ -2614,15 +2688,22 @@ function renderDashboard(dash, recent) {
   html += '</div>';
 
   // Sources table
-  html += '<div class="charts-grid"><div class="chart-card"><h3>Traffic Sources</h3><table><thead><tr><th>Source</th><th>Visits</th><th>Bots</th><th>Bot %</th></tr></thead><tbody>';
+  html += '<div class="charts-grid"><div class="chart-card"><h3>Traffic Sources</h3><table><thead><tr><th>Source</th><th>Visits</th><th>Bots</th><th>Allowed Crawlers</th><th>Bot %</th></tr></thead><tbody>';
   for (const s of (dash.sources || [])) {
     const pct = s.count > 0 ? (s.bots / s.count * 100).toFixed(1) : '0.0';
-    html += '<tr><td>' + esc(s.source) + '</td><td>' + fmt(s.count) + '</td><td>' + fmt(s.bots) + '</td><td>' + pct + '%</td></tr>';
+    html += '<tr><td>' + esc(s.source) + '</td><td>' + fmt(s.count) + '</td><td>' + fmt(s.bots) + '</td><td>' + fmt(s.allowedCrawlers || 0) + '</td><td>' + pct + '%</td></tr>';
   }
   html += '</tbody></table></div>';
 
+  html += '<div class="table-card"><h3>Allowed Crawlers</h3><table><thead><tr><th>Source</th><th>Visits</th><th>Last Seen</th><th>Sample UA</th></tr></thead><tbody>';
+  for (const s of (dash.allowedCrawlerSources || [])) {
+    const lastSeen = s.lastSeen ? new Date(s.lastSeen + 'Z').toLocaleTimeString() : '';
+    html += '<tr><td>' + esc(s.source || '') + '</td><td>' + fmt(s.count || 0) + '</td><td>' + esc(lastSeen) + '</td><td>' + esc((s.sampleUa || '').slice(0, 56)) + '</td></tr>';
+  }
+  html += '</tbody></table></div></div>';
+
   // Recent visits
-  html += '<div class="table-card"><h3>Recent Bot Visits</h3><table><thead><tr><th>Time</th><th>Type</th><th>Score</th><th>Confidence</th><th>Source</th><th>Page</th></tr></thead><tbody>';
+  html += '<div class="table-card"><h3>Recent Bots and Allowed Crawlers</h3><table><thead><tr><th>Time</th><th>Type</th><th>Score</th><th>Confidence</th><th>Source</th><th>Page</th></tr></thead><tbody>';
   for (const v of (recent.visits || []).slice(0, 25)) {
     const type = v.is_coupon_bot ? 'coupon' : v.is_legitimate ? 'legit' : v.is_bot ? 'bot' : 'human';
     const typeLabel = v.is_coupon_bot ? 'Coupon Bot' : v.is_legitimate ? 'Crawler' : v.is_bot ? 'Bot' : 'Human';
@@ -2666,8 +2747,8 @@ function renderDonutChart(bt) {
   donutChart = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: ['Humans', 'Bad Bots', 'Coupon Bots', 'Legitimate Crawlers'],
-      datasets: [{ data: [bt.humans || 0, bt.badBots || 0, bt.couponBots || 0, bt.legitimateBots || 0], backgroundColor: ['#22c55e', '#ef4444', '#a855f7', '#3b82f6'] }]
+      labels: ['Humans', 'Bad Bots', 'Coupon Bots', 'Allowed Crawlers'],
+      datasets: [{ data: [bt.humans || 0, bt.badBots || 0, bt.couponBots || 0, bt.allowedCrawlers || 0], backgroundColor: ['#22c55e', '#ef4444', '#a855f7', '#3b82f6'] }]
     },
     options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 12 } } } }
   });
@@ -2889,8 +2970,8 @@ function metric(cls,label,value,hint){return '<div class="metric '+cls+'"><div c
 function switches(name,checked,title,copy){return '<label class="switch"><input type="checkbox" name="'+esc(name)+'"'+(checked?' checked':'')+'><div><strong>'+esc(title)+'</strong><span>'+esc(copy)+'</span></div></label>'}
 function findings(items){if(!(items||[]).length)return '<div class="card"><p class="sub">No hard-evidence findings were produced under the current conservative settings.</p></div>';return items.map(function(item){const tone=item.severity==='high'?'bad':item.severity==='medium'?'warn':'info';return '<div class="finding"><div class="row"><span class="chip '+tone+'">'+esc(item.severity)+'</span><span class="chip info">'+esc(item.category)+'</span><span class="sub">'+esc(item.location||'')+'</span><span class="sub">Impact '+pct(item.missedConversionPct||0)+'%</span></div><h4>'+esc(item.title)+'</h4><p>'+esc(item.evidence||item.fix||'')+'</p>'+(item.fix?'<p style="margin-top:8px"><strong>Fix:</strong> '+esc(item.fix)+'</p>':'')+'</div>'}).join('')}
 async function loadBot(force){const s=needShop();if(!s)return;const key='bot:'+s+':'+days();if(!force&&state.cache[key])return renderBot(state.cache[key]);loading('bot-blocker','Loading bot-blocker analytics...');const data={dash:await api(API+'/api/dashboard?shop='+encodeURIComponent(s)+'&days='+encodeURIComponent(days())),recent:await api(API+'/api/recent?shop='+encodeURIComponent(s)+'&limit=50'),settings:await api(API+'/api/admin/settings?shop='+encodeURIComponent(s))};state.cache[key]=data;renderBot(data)}
-function renderBot(data){const t=data.dash.totals||{};const y=(data.settings&&data.settings.settings&&data.settings.settings.intent)||{};const total=Number(t.totalVisits)||0;let h='<div class="head"><div><h2>Bot-Blocker</h2><p>Commerce Shield remains the default home tab. Bot risk and customer intent stay separated so the storefront blocker can stay aggressive without polluting Bloomreach-facing intent tiers.</p></div><span class="chip ok">Live storefront guard</span></div>';h+='<div class="grid cards">'+metric('','Sessions',fmt(total),'All storefront sessions captured in the selected period.')+metric('','Humans',fmt(t.humanVisits||0),'Traffic that stayed on the safe path.')+metric('bad','Bots detected',fmt(t.botVisits||0),'Sessions classified as bots and isolated from clean analytics.')+metric('warn','Bot rate',pct(total?((Number(t.botVisits)||0)/total)*100:0)+'%','Share of selected traffic classified as bot activity.')+metric('','Coupon bots',fmt(t.couponBots||0),'Known coupon extensions and similar crawler traffic.')+metric('','Pixels protected',fmt(t.pixelsProtected||0),'High-confidence bot events blocked from downstream pixels.')+metric('','Emails blocked',fmt(t.disposableEmailsBlocked||0),'Disposable email attempts rejected by Commerce Shield.')+'</div>';h+='<div class="grid two"><div class="card"><h3>Traffic Sources</h3><table><thead><tr><th>Source</th><th>Visits</th><th>Bots</th><th>Bot %</th></tr></thead><tbody>';(data.dash.sources||[]).forEach(function(row){const r=Number(row.count)?((Number(row.bots)||0)/Number(row.count))*100:0;h+='<tr><td>'+esc(row.source||'direct')+'</td><td>'+fmt(row.count)+'</td><td>'+fmt(row.bots)+'</td><td>'+pct(r)+'%</td></tr>'});if(!(data.dash.sources||[]).length)h+='<tr><td colspan="4" class="sub">No source data has been recorded yet.</td></tr>';h+='</tbody></table></div>';h+='<div class="card"><h3>Recent Visits</h3><table><thead><tr><th>Time</th><th>Type</th><th>Score</th><th>Confidence</th><th>Source</th></tr></thead><tbody>';(data.recent.visits||[]).slice(0,20).forEach(function(v){const type=v.is_coupon_bot?'Coupon Bot':v.is_legitimate?'Crawler':v.is_bot?'Bot':'Human';h+='<tr><td>'+esc(v.created_at?new Date(v.created_at+'Z').toLocaleString():'—')+'</td><td>'+esc(type)+'</td><td>'+pct(v.bot_score||0)+'</td><td>'+esc(v.confidence||'low')+'</td><td>'+esc(v.source||'direct')+'</td></tr>'});if(!(data.recent.visits||[]).length)h+='<tr><td colspan="5" class="sub">No visit classifications recorded yet.</td></tr>';h+='</tbody></table></div></div>';h+='<div class="card"><h3>Bot Guard Controls</h3><form onsubmit="return saveSettings(event,\\'botProtection\\')"><div class="sub" style="margin-bottom:10px">Protection intensity '+fmt(y.botProtectionIntensity||5)+' / 10</div><p><input type="range" name="botProtectionIntensity" min="1" max="10" value="'+esc(y.botProtectionIntensity||5)+'" style="width:100%"></p>'+switches('botProtectionEnabled',y.botProtectionEnabled!==false,'Master bot protection switch','Turns storefront bot suppression on or off for non-technical operators.')+'<p style="margin-top:14px"><button type="submit">Save Bot Guard Controls</button></p></form></div>';panel('bot-blocker').innerHTML=h}
-async function saveSettings(event,section){event.preventDefault();const s=needShop();if(!s)return false;try{if(section!=='botProtection')return false;const fd=new FormData(event.currentTarget);const payload={shop:s,intent:{botProtectionEnabled:fd.get('botProtectionEnabled')==='on',botProtectionIntensity:Number(fd.get('botProtectionIntensity'))||5}};await api(API+'/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});state.cache={};msg('Settings saved. Reloading the active tab.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to save settings.','error')}return false}
+function renderBot(data){const t=data.dash.totals||{};const y=(data.settings&&data.settings.settings&&data.settings.settings.intent)||{};const total=Number(t.totalVisits)||0;let h='<div class="head"><div><h2>Bot-Blocker</h2><p>Commerce Shield remains the default home tab. Bot risk and customer intent stay separated so the storefront blocker can stay aggressive without polluting Bloomreach-facing intent tiers.</p></div><span class="chip ok">Live storefront guard</span></div>';h+='<div class="grid cards">'+metric('','Sessions',fmt(total),'All storefront sessions captured in the selected period.')+metric('','Humans',fmt(t.humanVisits||0),'Traffic that stayed on the safe path.')+metric('bad','Bots detected',fmt(t.botVisits||0),'Sessions classified as bots and isolated from clean analytics.')+metric('warn','Bot rate',pct(total?((Number(t.botVisits)||0)/total)*100:0)+'%','Share of selected traffic classified as bot activity.')+metric('','Coupon bots',fmt(t.couponBots||0),'Known coupon extensions and similar crawler traffic.')+metric('','Pixels protected',fmt(t.pixelsProtected||0),'High-confidence bot events blocked from downstream pixels.')+metric('','Emails blocked',fmt(t.disposableEmailsBlocked||0),'Disposable email attempts rejected by Commerce Shield.')+'</div>';h+='<div class="grid two"><div class="card"><h3>Traffic Sources</h3><table><thead><tr><th>Source</th><th>Visits</th><th>Bots</th><th>Bot %</th></tr></thead><tbody>';(data.dash.sources||[]).forEach(function(row){const r=Number(row.count)?((Number(row.bots)||0)/Number(row.count))*100:0;h+='<tr><td>'+esc(row.source||'direct')+'</td><td>'+fmt(row.count)+'</td><td>'+fmt(row.bots)+'</td><td>'+pct(r)+'%</td></tr>'});if(!(data.dash.sources||[]).length)h+='<tr><td colspan="4" class="sub">No source data has been recorded yet.</td></tr>';h+='</tbody></table></div>';h+='<div class="card"><h3>Recent Visits</h3><table><thead><tr><th>Time</th><th>Type</th><th>Score</th><th>Confidence</th><th>Source</th></tr></thead><tbody>';(data.recent.visits||[]).slice(0,20).forEach(function(v){const type=v.is_coupon_bot?'Coupon Bot':v.is_legitimate?'Crawler':v.is_bot?'Bot':'Human';h+='<tr><td>'+esc(v.created_at?new Date(v.created_at+'Z').toLocaleString():'—')+'</td><td>'+esc(type)+'</td><td>'+pct(v.bot_score||0)+'</td><td>'+esc(v.confidence||'low')+'</td><td>'+esc(v.source||'direct')+'</td></tr>'});if(!(data.recent.visits||[]).length)h+='<tr><td colspan="5" class="sub">No visit classifications recorded yet.</td></tr>';h+='</tbody></table></div></div>';h+='<div class="card"><h3>Bot Guard Controls</h3><form onsubmit="return saveSettings(event,\\'botProtection\\')"><div class="sub" style="margin-bottom:10px">Protection intensity '+fmt(y.botProtectionIntensity||7)+' / 10</div><p><input type="range" name="botProtectionIntensity" min="1" max="10" value="'+esc(y.botProtectionIntensity||7)+'" style="width:100%"></p>'+switches('botProtectionEnabled',y.botProtectionEnabled!==false,'Master bot protection switch','Turns storefront bot suppression on or off for non-technical operators.')+'<p style="margin-top:14px"><button type="submit">Save Bot Guard Controls</button></p></form></div>';panel('bot-blocker').innerHTML=h}
+async function saveSettings(event,section){event.preventDefault();const s=needShop();if(!s)return false;try{if(section!=='botProtection')return false;const fd=new FormData(event.currentTarget);const payload={shop:s,intent:{botProtectionEnabled:fd.get('botProtectionEnabled')==='on',botProtectionIntensity:Number(fd.get('botProtectionIntensity'))||7}};await api(API+'/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});state.cache={};msg('Settings saved. Reloading the active tab.','success');await refreshActive(true)}catch(error){msg(error.message||'Unable to save settings.','error')}return false}
 function activateTab(tab){state.tab=tab;document.querySelectorAll('.tabs button').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-tab')===tab)});document.querySelectorAll('.panel').forEach(function(p){p.classList.toggle('active',p.id==='panel-'+tab)});refreshActive(false)}
 async function refreshActive(force){msg('','success');const now=Date.now();const minMs=TAB_REFRESH_MS[state.tab]||1800000;const last=state.lastFetch[state.tab]||0;if(!force&&now-last<minMs){return}state.lastFetch[state.tab]=now;try{if(state.tab==='bot-blocker')await loadBot(force)}catch(error){msg(error.message||'Unable to load data.','error')}}
 window.activateTab=activateTab;window.refreshActive=refreshActive;window.saveSettings=saveSettings;window.installPixelGuard=installPixelGuard;if(document.getElementById('shopInput').value){setTimeout(function(){refreshActive(true)},180)}

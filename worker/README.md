@@ -82,7 +82,7 @@ npm run worker:deploy
 Use this script in the Shopify theme/app embed before marketing pixels:
 
 ```html
-<script src="https://commerce-shield.ncassidy.workers.dev/cs-pixel-guard.js?shop=gcw-dev.myshopify.com"></script>
+<script src="https://commerce-shield-prod.ncassidy.workers.dev/cs-pixel-guard.js?shop=gerberchildrenswear.myshopify.com"></script>
 ```
 
 The script only suppresses known marketing/analytics pixel calls for high-confidence bot or automation sessions. Normal shoppers and uncertain sessions are left alone.
@@ -94,7 +94,7 @@ The embedded admin's **Install Pixel Guard** button installs this script automat
 - Confirm `main` in `wrangler.toml` is `src/index.js`.
 - Confirm imports to `../../shared/intent-scoring.js` and `../../shared/worker-security.js` resolve.
 - Confirm Cloudflare D1 binding name is `DB`.
-- Confirm Worker URL is `https://commerce-shield.ncassidy.workers.dev`.
+- Confirm Worker URL is `https://commerce-shield-prod.ncassidy.workers.dev`.
 - Run local dev once before deploy to catch config issues.
 
 ## Troubleshooting

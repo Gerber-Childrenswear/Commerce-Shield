@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS daily_stats (
   bot_visits INTEGER NOT NULL DEFAULT 0,
   coupon_bots INTEGER NOT NULL DEFAULT 0,
   pixels_protected INTEGER NOT NULL DEFAULT 0,
+  allowed_crawlers INTEGER NOT NULL DEFAULT 0,
   disposable_emails_blocked INTEGER NOT NULL DEFAULT 0,
   UNIQUE(shop, date)
 );

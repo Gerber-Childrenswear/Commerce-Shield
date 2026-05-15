@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 8080;
 const SHARED_SECRET = process.env.EDGE_BOT_SHARED_SECRET || '';
 const DEFAULT_WORKER_URL = 'https://commerce-shield-prod.ncassidy.workers.dev';
 const WORKER_URL = (process.env.WORKER_URL || process.env.SHOPIFY_APP_URL || DEFAULT_WORKER_URL).replace(/\/$/, '');
-const BLOCKED_FORWARD_SOURCES = process.env.BLOCKED_FORWARD_SOURCES || 'gtm-server';
+const BLOCKED_FORWARD_SOURCES = process.env.BLOCKED_FORWARD_SOURCES || '';
 const FORWARD_TIMEOUT_MS = Number(process.env.FORWARD_TIMEOUT_MS) > 0
   ? Number(process.env.FORWARD_TIMEOUT_MS)
   : 5000;
@@ -25,6 +25,39 @@ function parseSourceDenylist(value) {
 }
 
 const blockedSources = parseSourceDenylist(BLOCKED_FORWARD_SOURCES);
+const signerAudit = {
+  startedAt: new Date().toISOString(),
+  totalRequests: 0,
+  blockedRequests: 0,
+  forwardedRequests: 0,
+  failedRequests: 0,
+  upstreamStatusCounts: {},
+  lastRequestAt: null,
+  lastBlockedAt: null,
+  lastForwardAt: null,
+  lastErrorAt: null,
+  lastSource: null,
+};
+
+function incrementUpstreamStatus(statusCode) {
+  const key = String(statusCode || 'unknown');
+  signerAudit.upstreamStatusCounts[key] = (signerAudit.upstreamStatusCounts[key] || 0) + 1;
+}
+
+function buildHealthPayload() {
+  return {
+    status: 'ok',
+    service: 'commerce-shield-signer',
+    uptimeSec: Math.floor(process.uptime()),
+    config: {
+      workerUrl: WORKER_URL,
+      secretConfigured: Boolean(SHARED_SECRET),
+      forwardTimeoutMs: FORWARD_TIMEOUT_MS,
+      blockedForwardSources: Array.from(blockedSources),
+    },
+    audit: signerAudit,
+  };
+}
 
 function normalizeSource(value) {
   return String(value || '').trim().toLowerCase();
@@ -48,16 +81,26 @@ function generateNonce(length = 32) {
 
 app.post('/api/integrations/edge-bot-event', async (req, res) => {
   try {
+    signerAudit.totalRequests += 1;
+    signerAudit.lastRequestAt = new Date().toISOString();
+
     if (!SHARED_SECRET) {
+      signerAudit.failedRequests += 1;
+      signerAudit.lastErrorAt = new Date().toISOString();
       return res.status(503).json({ error: 'Signer not configured: EDGE_BOT_SHARED_SECRET is missing' });
     }
 
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      signerAudit.failedRequests += 1;
+      signerAudit.lastErrorAt = new Date().toISOString();
       return res.status(400).json({ error: 'Invalid JSON body' });
     }
 
     const source = normalizeSource(req.body.source);
+    signerAudit.lastSource = source || null;
     if (source && blockedSources.has(source)) {
+      signerAudit.blockedRequests += 1;
+      signerAudit.lastBlockedAt = new Date().toISOString();
       return res.status(200).json({ ok: true, accepted: false, reason: 'blocked_source' });
     }
 
@@ -108,6 +151,9 @@ app.post('/api/integrations/edge-bot-event', async (req, res) => {
     });
 
     const result = await forwardReq;
+  signerAudit.forwardedRequests += 1;
+  signerAudit.lastForwardAt = new Date().toISOString();
+  incrementUpstreamStatus(result.status);
 
     res.status(result.status || 200);
     Object.entries(result.headers || {}).forEach(([k, v]) => {
@@ -122,13 +168,19 @@ app.post('/api/integrations/edge-bot-event', async (req, res) => {
       res.send(result.body);
     }
   } catch (err) {
+    signerAudit.failedRequests += 1;
+    signerAudit.lastErrorAt = new Date().toISOString();
     console.error('Signer error:', err);
     res.status(500).json({ error: 'Signer service error', details: err.message });
   }
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'commerce-shield-signer' });
+  res.json(buildHealthPayload());
+});
+
+app.get('/audit', (req, res) => {
+  res.json(buildHealthPayload());
 });
 
 app.listen(PORT, () => {

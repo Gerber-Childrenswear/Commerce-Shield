@@ -99,6 +99,12 @@ After deployment, test the signer:
 curl https://commerce-shield-signer-xxxxx.run.app/health
 ```
 
+For request-forwarding audit counters, use:
+
+```bash
+curl https://commerce-shield-signer-xxxxx.run.app/audit
+```
+
 Expected response:
 ```json
 {"status":"ok","service":"commerce-shield-signer"}
@@ -112,6 +118,7 @@ Expected response:
 |-----|----------|---------|
 | `EDGE_BOT_SHARED_SECRET` | YES | Base64-encoded HMAC key |
 | `WORKER_URL` | NO (default shown) | https://<your-worker-origin> |
+| `BLOCKED_FORWARD_SOURCES` | NO (default empty) | gtm-loop-test,internal-replay |
 | `PORT` | NO (default 8080) | 8080 |
 
 ---

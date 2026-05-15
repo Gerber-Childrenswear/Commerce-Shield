@@ -59,6 +59,14 @@ Service URL: https://commerce-shield-signer-XXXXX.run.app
 
 **Copy that URL — you'll need it next.**
 
+Quick verification:
+
+```powershell
+curl https://commerce-shield-signer-XXXXX.run.app/audit
+```
+
+The response should include `audit.totalRequests` and `audit.forwardedRequests` counters.
+
 ### 2. Create GTM HTTP Request Tag
 
 In your GTM server container:

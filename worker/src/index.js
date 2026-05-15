@@ -1608,13 +1608,13 @@ function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidenc
 
   // Free-plan signal available on all Cloudflare plans.
   const threatScore = Number(cf.threatScore) || 0;
-  if (threatScore > 30) {
+  if (threatScore > 50) {
     score = Math.max(score, 0.9);
     isBot = true;
     confidence = "high";
     reasons.push(`cf_threat_${threatScore}`);
-  } else if (threatScore > 10) {
-    score = Math.max(score, Math.min(1, score + 0.25));
+  } else if (threatScore > 25) {
+    score = Math.max(score, Math.min(1, score + 0.12));
     reasons.push(`cf_threat_${threatScore}`);
   }
 
@@ -1623,13 +1623,13 @@ function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidenc
   if (bm) {
     const bmScore = Number(bm.score);
     if (Number.isFinite(bmScore)) {
-      if (bmScore <= 10) {
+      if (bmScore <= 5) {
         score = Math.max(score, 0.95);
         isBot = true;
         confidence = "high";
         reasons.push(`cf_bm_score_${bmScore}`);
-      } else if (bmScore <= 30) {
-        score = Math.max(score, Math.min(1, score + 0.4));
+      } else if (bmScore <= 15) {
+        score = Math.max(score, Math.min(1, score + 0.15));
         reasons.push(`cf_bm_score_${bmScore}`);
       }
     }
@@ -1648,17 +1648,17 @@ function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidenc
   // Datacenter reputation by ASN and ASN organization.
   const asn = Number(cf.asn) || 0;
   if (asn && DATACENTER_ASNS.has(asn)) {
-    score = Math.max(score, Math.min(1, score + 0.45));
+    score = Math.max(score, Math.min(1, score + 0.08));
     reasons.push(`datacenter_asn_${asn}`);
   }
 
   const asOrg = sanitizeString(cf.asOrganization, 140).toLowerCase();
   if (asOrg && DATACENTER_ORG_HINTS.some((hint) => asOrg.includes(hint))) {
-    score = Math.max(score, Math.min(1, score + 0.25));
+    score = Math.max(score, Math.min(1, score + 0.08));
     reasons.push("datacenter_as_org");
   }
 
-  if (score >= 0.9) {
+  if (score >= 0.95) {
     isBot = true;
     confidence = "high";
   }
@@ -1721,6 +1721,7 @@ async function handleStats(request, env, corsHeaders, ctx) {
     ? Math.min(1, Math.max(0, envSampleRate))
     : DEFAULT_HUMAN_VISIT_SAMPLE_RATE;
   const envSuspiciousThreshold = Number(env.SUSPICIOUS_VISIT_THRESHOLD);
+  const suspiciousThreshold = Number.isFinite(envSuspiciousThreshold) ? envSuspiciousThreshold : 0.85;
   // sample low-risk humans, while keeping daily totals exact.
   const shouldPersistVisitRow =
     finalIsBot ||

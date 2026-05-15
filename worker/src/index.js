@@ -1608,13 +1608,13 @@ function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidenc
 
   // Free-plan signal available on all Cloudflare plans.
   const threatScore = Number(cf.threatScore) || 0;
-  if (threatScore > 50) {
+  if (threatScore > 70) {
     score = Math.max(score, 0.9);
     isBot = true;
     confidence = "high";
     reasons.push(`cf_threat_${threatScore}`);
-  } else if (threatScore > 25) {
-    score = Math.max(score, Math.min(1, score + 0.12));
+  } else if (threatScore > 40) {
+    score = Math.max(score, Math.min(1, score + 0.08));
     reasons.push(`cf_threat_${threatScore}`);
   }
 
@@ -1623,13 +1623,13 @@ function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidenc
   if (bm) {
     const bmScore = Number(bm.score);
     if (Number.isFinite(bmScore)) {
-      if (bmScore <= 5) {
+      if (bmScore <= 3) {
         score = Math.max(score, 0.95);
         isBot = true;
         confidence = "high";
         reasons.push(`cf_bm_score_${bmScore}`);
-      } else if (bmScore <= 15) {
-        score = Math.max(score, Math.min(1, score + 0.15));
+      } else if (bmScore <= 10) {
+        score = Math.max(score, Math.min(1, score + 0.10));
         reasons.push(`cf_bm_score_${bmScore}`);
       }
     }
@@ -1645,20 +1645,20 @@ function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidenc
     }
   }
 
-  // Datacenter reputation by ASN and ASN organization.
+  // Datacenter reputation by ASN — soft signal only, ignore unless score already high.
   const asn = Number(cf.asn) || 0;
-  if (asn && DATACENTER_ASNS.has(asn)) {
-    score = Math.max(score, Math.min(1, score + 0.08));
+  if (asn && DATACENTER_ASNS.has(asn) && score >= 0.5) {
+    score = Math.max(score, Math.min(1, score + 0.05));
     reasons.push(`datacenter_asn_${asn}`);
   }
 
   const asOrg = sanitizeString(cf.asOrganization, 140).toLowerCase();
-  if (asOrg && DATACENTER_ORG_HINTS.some((hint) => asOrg.includes(hint))) {
-    score = Math.max(score, Math.min(1, score + 0.08));
+  if (asOrg && DATACENTER_ORG_HINTS.some((hint) => asOrg.includes(hint)) && score >= 0.5) {
+    score = Math.max(score, Math.min(1, score + 0.05));
     reasons.push("datacenter_as_org");
   }
 
-  if (score >= 0.95) {
+  if (score >= 0.97) {
     isBot = true;
     confidence = "high";
   }

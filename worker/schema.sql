@@ -29,8 +29,18 @@ CREATE TABLE IF NOT EXISTS daily_stats (
   UNIQUE(shop, date)
 );
 
+CREATE TABLE IF NOT EXISTS turnstile_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  shop TEXT NOT NULL,
+  success INTEGER NOT NULL DEFAULT 0,
+  action TEXT,
+  error_code TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_visits_shop_created ON visits(shop, created_at);
 CREATE INDEX IF NOT EXISTS idx_daily_stats_shop_date ON daily_stats(shop, date);
+CREATE INDEX IF NOT EXISTS idx_turnstile_events_shop_created ON turnstile_events(shop, created_at);
 
 CREATE TABLE IF NOT EXISTS intent_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

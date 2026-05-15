@@ -1906,12 +1906,21 @@ async function handleDashboardData(request, url, env, corsHeaders, ctx) {
      FROM visits WHERE shop = ? AND created_at >= datetime(?)`
   ).bind(shop, sinceStr + "T00:00:00").first();
 
+  const turnstileStats = await env.DB.prepare(
+    `SELECT
+       SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as passed,
+       SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failed,
+       COUNT(*) as total
+     FROM turnstile_events WHERE shop = ? AND created_at >= datetime(?)`
+  ).bind(shop, sinceStr + "T00:00:00").first();
+
     return jsonResponseWithHeaders({
       dailyStats: stats.results || [],
       totals: totals || {},
       sources: sources.results || [],
       allowedCrawlerSources: allowedCrawlerSources.results || [],
       botTypes: botTypes || {},
+      turnstile: turnstileStats || { passed: 0, failed: 0, total: 0 },
     }, 200, corsHeaders, {
       "Cache-Control": "public, max-age=0, s-maxage=45, stale-while-revalidate=180",
     });
@@ -2002,6 +2011,7 @@ async function handleTurnstileVerify(request, env, corsHeaders) {
 
   const token = typeof body?.token === "string" ? body.token.slice(0, 2048) : "";
   const action = typeof body?.action === "string" ? body.action.slice(0, 50) : "";
+  const shop = typeof body?.shop === "string" ? body.shop.slice(0, 100) : "";
 
   if (!token) {
     return jsonResponse({ ok: false, error: "missing_token" }, 400, corsHeaders);
@@ -2034,6 +2044,24 @@ async function handleTurnstileVerify(request, env, corsHeaders) {
   }
 
   const ok = result.success === true;
+  const errorCodes = result["error-codes"];
+  const errorCode = Array.isArray(errorCodes) && errorCodes.length > 0 ? errorCodes[0] : null;
+  
+  // Log Turnstile event to database
+  if (shop && env?.DB) {
+    try {
+      const normalizedShop = normalizeShopDomain(shop);
+      if (normalizedShop) {
+        env.DB.prepare(
+          `INSERT INTO turnstile_events (shop, success, action, error_code)
+           VALUES (?, ?, ?, ?)`
+        ).bind(normalizedShop, ok ? 1 : 0, action || null, errorCode || null).run();
+      }
+    } catch (e) {
+      console.log("turnstile_log_error", e.message);
+    }
+  }
+  
   return jsonResponse({ ok }, ok ? 200 : 403, corsHeaders);
 }
 

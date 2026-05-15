@@ -1522,9 +1522,10 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
     : finalBotScore >= challengeThreshold
       ? "medium"
       : "low";
-  const finalIsBot = botProtectionEnabled && !effectiveIsLegitimate && finalConfidence === "high";
+  // Safety guard: only high-confidence traffic is persisted/counted as bot.
+  const classifiedIsBot = !effectiveIsLegitimate && finalConfidence === "high";
 
-  if (!finalIsBot && !effectiveIsLegitimate) {
+  if (!classifiedIsBot && !effectiveIsLegitimate) {
     console.log("edge_bot_event:below_threshold");
     return jsonResponse({ ok: true, accepted: false, reason: "below_threshold" }, 200, corsHeaders);
   }
@@ -1545,7 +1546,7 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
   ).bind(
     shop,
-    finalIsBot ? 1 : 0,
+    classifiedIsBot ? 1 : 0,
     persistedBotScore,
     persistedConfidence,
     body.isMobile === true ? 1 : 0,
@@ -1567,18 +1568,18 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
     shop,
     today,
     effectiveIsLegitimate ? 0 : 1,
-    finalIsBot ? 1 : 0,
-    finalIsBot && finalConfidence === "high" ? 1 : 0,
+    classifiedIsBot ? 1 : 0,
+    classifiedIsBot && botProtectionEnabled ? 1 : 0,
     effectiveIsLegitimate ? 1 : 0,
     effectiveIsLegitimate ? 0 : 1,
-    finalIsBot ? 1 : 0,
-    finalIsBot && finalConfidence === "high" ? 1 : 0,
+    classifiedIsBot ? 1 : 0,
+    classifiedIsBot && botProtectionEnabled ? 1 : 0,
     effectiveIsLegitimate ? 1 : 0,
   ).run();
 
   return jsonResponse({
     ok: true,
-    accepted: finalIsBot,
+    accepted: classifiedIsBot && botProtectionEnabled,
     segmented: effectiveIsLegitimate ? "allowed_crawler" : null,
     shop,
     botScore: finalBotScore,
@@ -1709,11 +1710,13 @@ async function handleStats(request, env, corsHeaders, ctx) {
     isLegitimate === true ||
     isTrustedCrawlerSource(sourceValue, env) ||
     isTrustedCrawlerUserAgent(request, env, uaValue);
-  const finalIsBot = botProtectionEnabled && !effectiveIsLegitimate && finalConfidence === "high";
-  const pixelProtected = finalIsBot ? 1 : 0;
+  // Safety guard: only high-confidence traffic is persisted/counted as bot.
+  // We classify as bot regardless of protection enabled, so dashboard monitoring works.
+  const classifiedIsBot = !effectiveIsLegitimate && finalConfidence === "high";
+  const pixelProtected = classifiedIsBot && botProtectionEnabled ? 1 : 0;
   const countedVisit = effectiveIsLegitimate ? 0 : 1;
-  const humanVisit = countedVisit && !finalIsBot ? 1 : 0;
-  const botVisit = countedVisit && finalIsBot ? 1 : 0;
+  const humanVisit = countedVisit && !classifiedIsBot ? 1 : 0;
+  const botVisit = countedVisit && classifiedIsBot ? 1 : 0;
   const allowedCrawlerVisit = effectiveIsLegitimate ? 1 : 0;
 
   const envSampleRate = Number(env.HUMAN_VISIT_SAMPLE_RATE);
@@ -1724,7 +1727,7 @@ async function handleStats(request, env, corsHeaders, ctx) {
   const suspiciousThreshold = Number.isFinite(envSuspiciousThreshold) ? envSuspiciousThreshold : 0.85;
   // sample low-risk humans, while keeping daily totals exact.
   const shouldPersistVisitRow =
-    finalIsBot ||
+    classifiedIsBot ||
     isCouponBot === true ||
     isLegitimate === true ||
     finalBotScore >= suspiciousThreshold ||
@@ -1767,7 +1770,7 @@ async function handleStats(request, env, corsHeaders, ctx) {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         normalizedShop,
-        finalIsBot ? 1 : 0,
+        classifiedIsBot ? 1 : 0,
         Number(finalBotScore) || 0,
         sanitizeString(finalConfidence, 20) || "low",
         isMobile ? 1 : 0,

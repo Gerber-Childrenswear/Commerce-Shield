@@ -140,12 +140,12 @@
   function render() {
     if (typeof window.turnstile === 'undefined') return;
     
-    // Medium-conservative mode: show Turnstile for medium/high confidence.
-    // Low confidence visitors pass through without challenge.
+    // High-only mode: show Turnstile for confirmed high-confidence bots.
+    // Medium/low confidence visitors pass through without challenge.
     var pg = window.__CommerceShieldPixelGuard;
     var confidence = pg && pg.decision ? pg.decision.confidence : 'low';
-    if (confidence !== 'high' && confidence !== 'medium') {
-      // Low confidence — don't show Turnstile
+    if (confidence !== 'high') {
+      // Not confirmed high-confidence bot — don't show Turnstile
       markVerified();
       return;
     }
@@ -167,13 +167,13 @@
     var forms = document.querySelectorAll('form[action*="/account"]');
     forms.forEach(function(form) {
       form.addEventListener('submit', function(e) {
-        // Medium-conservative mode: challenge medium/high confidence only.
+        // High-only mode: challenge high-confidence only.
         var pg = window.__CommerceShieldPixelGuard;
         var confidence = pg && pg.decision ? pg.decision.confidence : 'low';
-        var shouldChallenge = confidence === 'high' || confidence === 'medium';
+        var shouldChallenge = confidence === 'high';
         
         if (!shouldChallenge) {
-          // Low confidence — allow form submit
+          // Medium/low confidence — allow form submit
           return;
         }
         

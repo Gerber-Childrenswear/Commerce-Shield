@@ -27,7 +27,7 @@
   'use strict';
 
   var SITE_KEY = '0x4AAAAAADI8ti4vY8C6Vy8O';
-  var WORKER   = 'https://commerce-shield-prod.ncassidy.workers.dev';
+  var WORKER   = (window.__COMMERCE_SHIELD_WORKER_ORIGIN || 'https://commerce-shield-prod.ncassidy.workers.dev').replace(/\/$/, '');
   var VERIFY_API = WORKER + '/api/turnstile-verify';
 
   var widgetId = null;

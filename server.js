@@ -3,14 +3,15 @@
 const express = require('express');
 const crypto = require('crypto');
 
-const WORKER_ORIGIN = process.env.WORKER_ORIGIN || 'https://commerce-shield-prod.ncassidy.workers.dev';
+const DEFAULT_WORKER_ORIGIN = 'https://commerce-shield-prod.ncassidy.workers.dev';
+const WORKER_ORIGIN = (process.env.WORKER_ORIGIN || process.env.SHOPIFY_APP_URL || DEFAULT_WORKER_ORIGIN).replace(/\/$/, '');
 const PIXEL_GUARD_TTL_MS = parseInt(process.env.PIXEL_GUARD_TTL_MS || String(24 * 60 * 60 * 1000), 10);
 const PIXEL_GUARD_MAX_ENTRIES = 16;
 
 const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY || 'dc386b789af148f54d80b54d07e63215';
 const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || '';
 const SHOPIFY_SCOPES = 'read_script_tags,write_script_tags,read_themes,write_themes';
-const SHOPIFY_APP_URL = (process.env.SHOPIFY_APP_URL || 'https://commerce-shield-prod.ncassidy.workers.dev').replace(/\/$/, '');
+const SHOPIFY_APP_URL = (process.env.SHOPIFY_APP_URL || WORKER_ORIGIN).replace(/\/$/, '');
 const OAUTH_REDIRECT_URI = `${SHOPIFY_APP_URL}/auth/callback`;
 const OAUTH_NONCE_TTL_MS = 10 * 60 * 1000;
 const oauthNonces = new Map();
@@ -53,7 +54,7 @@ app.use((_req, res, next) => {
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('X-XSS-Protection', '0');
   // Allow Shopify admin iframe embedding; allow calls to the Cloudflare Worker
-  res.setHeader('Content-Security-Policy', "default-src 'self' https://commerce-shield-prod.ncassidy.workers.dev; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors https://*.myshopify.com https://admin.shopify.com");
+  res.setHeader('Content-Security-Policy', `default-src 'self' ${WORKER_ORIGIN}; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors https://*.myshopify.com https://admin.shopify.com`);
   res.removeHeader('X-Powered-By');
   next();
 });

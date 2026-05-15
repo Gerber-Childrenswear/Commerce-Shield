@@ -652,6 +652,16 @@ function getStorefrontDomains(env) {
   return normalized;
 }
 
+function getWorkerOriginHost(env) {
+  const appUrl = sanitizeString(env?.SHOPIFY_APP_URL, 255);
+  if (!appUrl) return "";
+  try {
+    return new URL(appUrl).hostname.toLowerCase();
+  } catch {
+    return normalizeHostName(appUrl) || "";
+  }
+}
+
 function validateOriginAndReferer(request, env, shop) {
   const storefrontDomains = getStorefrontDomains(env);
   if (!storefrontDomains.length) return true; // No storefront domain configured, allow all
@@ -663,9 +673,16 @@ function validateOriginAndReferer(request, env, shop) {
   if (origin && storefrontDomains.some((domain) => origin.includes(domain))) return true;
   if (referer && storefrontDomains.some((domain) => referer.includes(domain))) return true;
 
-  // Allow if origin is the workers.dev domain itself (same origin as this worker)
-  if (origin && origin.includes("workers.dev")) return true;
-  if (referer && referer.includes("workers.dev")) return true;
+  // Allow same-origin calls from the configured worker host.
+  // Fallback preserves previous behavior when SHOPIFY_APP_URL is missing.
+  const workerOriginHost = getWorkerOriginHost(env);
+  if (workerOriginHost) {
+    if (origin && origin.includes(workerOriginHost)) return true;
+    if (referer && referer.includes(workerOriginHost)) return true;
+  } else {
+    if (origin && origin.includes("workers.dev")) return true;
+    if (referer && referer.includes("workers.dev")) return true;
+  }
 
   // Allow if no origin/referer (e.g. mobile, direct fetch, curl with no headers)
   // This is intentionally permissive to avoid breaking legitimate mobile/app traffic

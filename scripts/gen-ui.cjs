@@ -7,8 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const SHOP   = 'gerberchildrenswear.myshopify.com';
-const ORIGIN = 'https://commerce-shield-prod.ncassidy.workers.dev';
+const DEFAULT_WORKER_ORIGIN = 'https://commerce-shield-prod.ncassidy.workers.dev';
+const SHOP = process.env.SHOPIFY_ADMIN_SHOP || 'gerberchildrenswear.myshopify.com';
+const ORIGIN = (process.env.WORKER_ORIGIN || process.env.SHOPIFY_APP_URL || DEFAULT_WORKER_ORIGIN).replace(/\/$/, '');
 
 const workerCode = fs.readFileSync(
   path.join(__dirname, '../worker/src/index.js'),

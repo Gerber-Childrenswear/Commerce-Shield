@@ -8,7 +8,8 @@ app.use(express.json({ limit: '10mb' }));
 
 const PORT = process.env.PORT || 8080;
 const SHARED_SECRET = process.env.EDGE_BOT_SHARED_SECRET || '';
-const WORKER_URL = process.env.WORKER_URL || 'https://commerce-shield-prod.ncassidy.workers.dev';
+const DEFAULT_WORKER_URL = 'https://commerce-shield-prod.ncassidy.workers.dev';
+const WORKER_URL = (process.env.WORKER_URL || process.env.SHOPIFY_APP_URL || DEFAULT_WORKER_URL).replace(/\/$/, '');
 const BLOCKED_FORWARD_SOURCES = process.env.BLOCKED_FORWARD_SOURCES || 'gtm-server';
 const FORWARD_TIMEOUT_MS = Number(process.env.FORWARD_TIMEOUT_MS) > 0
   ? Number(process.env.FORWARD_TIMEOUT_MS)
@@ -65,8 +66,7 @@ app.post('/api/integrations/edge-bot-event', async (req, res) => {
     const nonce = generateNonce();
     const signature = createHmacSignature(SHARED_SECRET, timestamp, nonce, bodyString);
 
-    const base = WORKER_URL.endsWith('/') ? WORKER_URL.slice(0, -1) : WORKER_URL;
-    const targetUrl = new URL(`${base}/api/integrations/edge-bot-event`);
+    const targetUrl = new URL(`${WORKER_URL}/api/integrations/edge-bot-event`);
     const client = getHttpClient(targetUrl);
 
     const forwardReq = new Promise((resolve, reject) => {

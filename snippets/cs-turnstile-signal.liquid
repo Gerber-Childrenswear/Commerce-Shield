@@ -139,6 +139,16 @@
 
   function render() {
     if (typeof window.turnstile === 'undefined') return;
+    
+    // Only show Turnstile for HIGH-confidence bots (confirmed threats).
+    // Medium/low confidence visitors pass through without challenge.
+    var pg = window.__CommerceShieldPixelGuard;
+    if (pg && pg.decision && pg.decision.confidence !== 'high') {
+      // Not a confirmed bot — don't show Turnstile
+      markVerified();
+      return;
+    }
+    
     widgetId = window.turnstile.render('#cs-ts-widget', {
       sitekey: SITE_KEY,
       // 'managed' → Cloudflare decides: invisible for clean browsers,
@@ -156,6 +166,15 @@
     var forms = document.querySelectorAll('form[action*="/account"]');
     forms.forEach(function(form) {
       form.addEventListener('submit', function(e) {
+        // Only challenge high-confidence bots. Everyone else passes through.
+        var pg = window.__CommerceShieldPixelGuard;
+        var isHighConfidenceBot = pg && pg.decision && pg.decision.confidence === 'high';
+        
+        if (!isHighConfidenceBot) {
+          // Not a confirmed bot — allow form submit
+          return;
+        }
+        
         if (verified || hasRecentVerification()) {
           verified = true;
           return;

@@ -140,11 +140,12 @@
   function render() {
     if (typeof window.turnstile === 'undefined') return;
     
-    // Only show Turnstile for HIGH-confidence bots (confirmed threats).
-    // Medium/low confidence visitors pass through without challenge.
+    // Medium-conservative mode: show Turnstile for medium/high confidence.
+    // Low confidence visitors pass through without challenge.
     var pg = window.__CommerceShieldPixelGuard;
-    if (pg && pg.decision && pg.decision.confidence !== 'high') {
-      // Not a confirmed bot — don't show Turnstile
+    var confidence = pg && pg.decision ? pg.decision.confidence : 'medium';
+    if (confidence !== 'high' && confidence !== 'medium') {
+      // Low confidence — don't show Turnstile
       markVerified();
       return;
     }
@@ -166,12 +167,13 @@
     var forms = document.querySelectorAll('form[action*="/account"]');
     forms.forEach(function(form) {
       form.addEventListener('submit', function(e) {
-        // Only challenge high-confidence bots. Everyone else passes through.
+        // Medium-conservative mode: challenge medium/high confidence only.
         var pg = window.__CommerceShieldPixelGuard;
-        var isHighConfidenceBot = pg && pg.decision && pg.decision.confidence === 'high';
+        var confidence = pg && pg.decision ? pg.decision.confidence : 'medium';
+        var shouldChallenge = confidence === 'high' || confidence === 'medium';
         
-        if (!isHighConfidenceBot) {
-          // Not a confirmed bot — allow form submit
+        if (!shouldChallenge) {
+          // Low confidence — allow form submit
           return;
         }
         

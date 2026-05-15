@@ -61,9 +61,10 @@ const DATACENTER_ORG_HINTS = [
 const KNOWN_BAD_JA3 = new Set([
   // Add observed bot TLS fingerprints here as they are identified.
 ]);
+const DEFAULT_MONITOR_ONLY_MODE = true;
 const DEFAULT_ADMIN_SETTINGS = Object.freeze({
   intent: {
-    botProtectionEnabled: true,
+    botProtectionEnabled: false,
     botProtectionIntensity: 7,
   },
 });
@@ -88,6 +89,12 @@ function isBlockedEventSource(env, source) {
   if (!normalized) return false;
   const blocked = parseBlockedEventSources(env);
   return blocked.has(normalized);
+}
+
+function isMonitorOnlyMode(env) {
+  const raw = sanitizeString(env?.MONITOR_ONLY_MODE, 20).toLowerCase();
+  if (!raw) return DEFAULT_MONITOR_ONLY_MODE;
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
 function parseHintList(value, fallback = []) {
@@ -982,9 +989,14 @@ async function getAdminSettings(env, shop) {
 
 async function saveAdminSettings(env, shop, partialSettings) {
   const current = await getAdminSettings(env, shop);
-  const nextIntent = normalizeAdminSettings({
+  let nextIntent = normalizeAdminSettings({
     intent: { ...current.intent, ...(partialSettings.intent || {}) },
   });
+  if (isMonitorOnlyMode(env)) {
+    nextIntent = normalizeAdminSettings({
+      intent: { ...nextIntent.intent, botProtectionEnabled: false },
+    });
+  }
   const intensityChanged = Number(current.intent.botProtectionIntensity) !== Number(nextIntent.intent.botProtectionIntensity);
   const enabledChanged = Boolean(current.intent.botProtectionEnabled) !== Boolean(nextIntent.intent.botProtectionEnabled);
   const next = {
@@ -1504,7 +1516,7 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
   }
 
   const settings = await getAdminSettings(env, shop);
-  const botProtectionEnabled = settings.intent.botProtectionEnabled !== false;
+  const botProtectionEnabled = !isMonitorOnlyMode(env) && settings.intent.botProtectionEnabled !== false;
   const botProtectionIntensity = normalizeBotProtectionIntensity(settings.intent.botProtectionIntensity);
   const botProtectionThreshold = botProtectionThresholdFromIntensity(botProtectionIntensity);
   const challengeThreshold = botProtectionChallengeThresholdFromIntensity(botProtectionIntensity);
@@ -1709,7 +1721,7 @@ async function handleStats(request, env, corsHeaders, ctx) {
   const today = new Date().toISOString().split("T")[0];
 
   const settings = await getAdminSettings(env, normalizedShop);
-  const botProtectionEnabled = settings.intent.botProtectionEnabled !== false;
+  const botProtectionEnabled = !isMonitorOnlyMode(env) && settings.intent.botProtectionEnabled !== false;
   const botProtectionIntensity = normalizeBotProtectionIntensity(settings.intent.botProtectionIntensity);
   const botProtectionThreshold = botProtectionThresholdFromIntensity(botProtectionIntensity);
   const challengeThreshold = botProtectionChallengeThresholdFromIntensity(botProtectionIntensity);
@@ -1841,7 +1853,7 @@ async function handlePixelGuardEvent(request, env, corsHeaders, ctx) {
   const pixelCount = clampNumber(body.count, 1, 1, 50);
 
   const settings = await getAdminSettings(env, shop);
-  const botProtectionEnabled = settings.intent.botProtectionEnabled !== false;
+  const botProtectionEnabled = !isMonitorOnlyMode(env) && settings.intent.botProtectionEnabled !== false;
   const botProtectionIntensity = normalizeBotProtectionIntensity(settings.intent.botProtectionIntensity);
   const botProtectionThreshold = botProtectionThresholdFromIntensity(botProtectionIntensity);
   const challengeThreshold = botProtectionChallengeThresholdFromIntensity(botProtectionIntensity);
@@ -2030,6 +2042,10 @@ async function handleTurnstileVerify(request, env, corsHeaders) {
     return jsonResponse({ ok: false, error: "invalid_json" }, 400, corsHeaders);
   }
 
+  if (isMonitorOnlyMode(env)) {
+    return jsonResponse({ ok: true, note: "monitor_only_mode" }, 200, corsHeaders);
+  }
+
   const token = typeof body?.token === "string" ? body.token.slice(0, 2048) : "";
   const action = typeof body?.action === "string" ? body.action.slice(0, 50) : "";
   const shop = typeof body?.shop === "string" ? body.shop.slice(0, 100) : "";
@@ -2090,7 +2106,7 @@ async function servePixelGuard(url, env) {
   const shop = normalizeShopDomain(url.searchParams.get("shop"));
   const reportOnly = url.searchParams.get("mode") === "report";
   const queryEnabled = url.searchParams.get("enabled") !== "0";
-  let enabled = queryEnabled;
+  let enabled = queryEnabled && !isMonitorOnlyMode(env);
   let intensity = cloneDefaultAdminSettings().intent.botProtectionIntensity;
   let intensityVersion = 1;
   let enabledVersion = 1;
@@ -2098,7 +2114,7 @@ async function servePixelGuard(url, env) {
   if (shop && env?.DB) {
     try {
       const settings = await getAdminSettings(env, shop);
-      enabled = queryEnabled && settings.intent.botProtectionEnabled !== false;
+      enabled = queryEnabled && !isMonitorOnlyMode(env) && settings.intent.botProtectionEnabled !== false;
       intensity = clampNumber(
         settings.intent.botProtectionIntensity,
         cloneDefaultAdminSettings().intent.botProtectionIntensity,

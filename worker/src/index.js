@@ -1522,7 +1522,7 @@ async function handleEdgeBotEvent(request, env, corsHeaders, ctx) {
     : finalBotScore >= challengeThreshold
       ? "medium"
       : "low";
-  const finalIsBot = botProtectionEnabled && !effectiveIsLegitimate && finalConfidence !== "low";
+  const finalIsBot = botProtectionEnabled && !effectiveIsLegitimate && finalConfidence === "high";
 
   if (!finalIsBot && !effectiveIsLegitimate) {
     console.log("edge_bot_event:below_threshold");
@@ -1709,7 +1709,7 @@ async function handleStats(request, env, corsHeaders, ctx) {
     isLegitimate === true ||
     isTrustedCrawlerSource(sourceValue, env) ||
     isTrustedCrawlerUserAgent(request, env, uaValue);
-  const finalIsBot = botProtectionEnabled && !effectiveIsLegitimate && finalConfidence !== "low";
+  const finalIsBot = botProtectionEnabled && !effectiveIsLegitimate && finalConfidence === "high";
   const pixelProtected = finalIsBot ? 1 : 0;
   const countedVisit = effectiveIsLegitimate ? 0 : 1;
   const humanVisit = countedVisit && !finalIsBot ? 1 : 0;

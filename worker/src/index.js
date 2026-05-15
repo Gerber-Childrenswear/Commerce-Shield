@@ -1604,18 +1604,19 @@ function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidenc
   }
   let score = Number(baseScore) || 0;
   let isBot = baseIsBot === true;
-  let confidence = baseConfidence === "high" ? "high" : "low";
+  let confidence = baseConfidence === "high" ? "high" : baseConfidence === "medium" ? "medium" : "low";
   const reasons = [];
 
   // Free-plan signal available on all Cloudflare plans.
   const threatScore = Number(cf.threatScore) || 0;
-  if (threatScore > 70) {
-    score = Math.max(score, 0.9);
+  if (threatScore > 50) {
+    score = Math.max(score, 0.92);
     isBot = true;
     confidence = "high";
     reasons.push(`cf_threat_${threatScore}`);
-  } else if (threatScore > 40) {
-    score = Math.max(score, Math.min(1, score + 0.08));
+  } else if (threatScore > 15) {
+    // Soft anomaly addition for low threat scores
+    score = Math.min(0.85, Math.max(score, score + 0.05));
     reasons.push(`cf_threat_${threatScore}`);
   }
 
@@ -1629,8 +1630,8 @@ function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidenc
         isBot = true;
         confidence = "high";
         reasons.push(`cf_bm_score_${bmScore}`);
-      } else if (bmScore <= 10) {
-        score = Math.max(score, Math.min(1, score + 0.10));
+      } else if (bmScore <= 29) {
+        score = Math.min(0.85, Math.max(score, score + 0.10));
         reasons.push(`cf_bm_score_${bmScore}`);
       }
     }
@@ -1646,20 +1647,20 @@ function applyCloudflareRiskSignals(request, baseScore, baseIsBot, baseConfidenc
     }
   }
 
-  // Datacenter reputation by ASN — soft signal only, ignore unless score already high.
+  // Datacenter reputation by ASN — soft signal only, do not cross high confidence purely on datacenter
   const asn = Number(cf.asn) || 0;
-  if (asn && DATACENTER_ASNS.has(asn) && score >= 0.5) {
-    score = Math.max(score, Math.min(1, score + 0.05));
+  if (asn && DATACENTER_ASNS.has(asn) && score > 0.1) {
+    score = Math.min(0.85, Math.max(score, score + 0.05));
     reasons.push(`datacenter_asn_${asn}`);
   }
 
   const asOrg = sanitizeString(cf.asOrganization, 140).toLowerCase();
-  if (asOrg && DATACENTER_ORG_HINTS.some((hint) => asOrg.includes(hint)) && score >= 0.5) {
-    score = Math.max(score, Math.min(1, score + 0.05));
+  if (asOrg && DATACENTER_ORG_HINTS.some((hint) => asOrg.includes(hint)) && score > 0.1) {
+    score = Math.min(0.85, Math.max(score, score + 0.05));
     reasons.push("datacenter_as_org");
   }
 
-  if (score >= 0.97) {
+  if (score >= 0.90) {
     isBot = true;
     confidence = "high";
   }
@@ -2143,95 +2144,41 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled, intensity) {
 
   function classifyVisitor() {
     const reasons = [];
-    let score = 0;
+    let hardScore = 0;
+    let anomalyCount = 0;
+    
     const protectionIntensity = Math.max(1, Math.min(10, Number(config.intensity) || 7));
     const highConfidenceThreshold = Number((0.9 - ((protectionIntensity - 1) * 0.015)).toFixed(2));
     const mediumConfidenceThreshold = Number((0.68 - ((protectionIntensity - 1) * 0.025)).toFixed(2));
     const lowerUa = ua.toLowerCase();
+    
     if (Array.isArray(config.trustedCrawlerHints) && config.trustedCrawlerHints.some((hint) => lowerUa.includes(String(hint || '').toLowerCase()))) {
       return { isBot: false, confidence: "low", botScore: 0, reasons: ["trusted_crawler"] };
     }
+    
+    // --- 1. Hard Bot Signals (Score >= 0.88) ---
     const hardUa = /(adsbot|applebot|baiduspider|bingbot|bot|crawler|curl|duckduckbot|facebookexternalhit|googlebot|headlesschrome|httpclient|lighthouse|micromessenger|mmwebsdk|phantomjs|playwright|prerender|puppeteer|python-requests|semrushbot|selenium|spider|wget|weixin|xweb\/|yandexbot)/i.test(ua);
     const automationUa = /(headlesschrome|phantomjs|playwright|puppeteer|selenium|webdriver|jsdom)/i.test(ua);
 
     if (hardUa) {
-      score = Math.max(score, 0.92);
+      hardScore = Math.max(hardScore, 0.92);
       reasons.push("bot_user_agent");
     }
     if (automationUa) {
-      score = Math.max(score, 0.94);
+      hardScore = Math.max(hardScore, 0.94);
       reasons.push("automation_user_agent");
     }
     if (navigator.webdriver === true) {
-      score = Math.max(score, 0.96);
+      hardScore = Math.max(hardScore, 0.96);
       reasons.push("webdriver");
     }
-    if (!/chrome|crios|safari|firefox|edg|opr|mobile/i.test(lowerUa)) {
-      score += 0.1;
-      reasons.push("non_browser_user_agent");
+    // CDP / Automation variables check
+    if (window.document && window.document.documentElement && window.document.documentElement.getAttribute("webdriver")) {
+      hardScore = Math.max(hardScore, 0.95);
+      reasons.push("webdriver_attribute");
     }
-    if (Array.isArray(navigator.languages) && navigator.languages.length === 0) {
-      score += 0.08;
-      reasons.push("empty_languages");
-    }
-
-    // Frozen/stale Chrome version — real Chrome auto-updates, but enterprise
-    // managed installs, locked-down kiosks, and embedded webviews legitimately
-    // run older versions. Treat as a soft signal only.
-    const chromeVerMatch = ua.match(/Chrome\/(\d+)\./);
-    if (chromeVerMatch) {
-      const chromeVer = parseInt(chromeVerMatch[1], 10);
-      if (chromeVer < 80) {
-        score += 0.18;
-        reasons.push("stale_chrome_version");
-      } else if (chromeVer < 110) {
-        score += 0.08;
-        reasons.push("stale_chrome_version");
-      }
-    }
-
-    // --- Browser environment fingerprinting ---
-    // Real Chrome always exposes window.chrome. Headless/Playwright/Puppeteer
-    // often omit it or have an incomplete stub. Some embedded webviews also
-    // strip it, so keep as a contributing signal rather than dominant.
-    if (/Chrome\//i.test(ua) && !lowerUa.includes('chromium')) {
-      if (typeof window.chrome === 'undefined' || window.chrome === null) {
-        score += 0.18;
-        reasons.push("chrome_ua_no_chrome_obj");
-      }
-    }
-
-    // Modern Chrome frequently exposes zero plugins by default; this is no
-    // longer a reliable bot signal on its own. Keep as a small contributor.
-    try {
-      if (navigator.plugins && navigator.plugins.length === 0 &&
-          /Chrome|Safari/i.test(ua) && !/Mobile|Android|iPhone|iPad/i.test(ua)) {
-        score += 0.08;
-        reasons.push("no_plugins");
-      }
-    } catch {}
-
-    // outerWidth/outerHeight are 0 in headless Chrome unless explicitly set —
-    // but they are also 0 in some in-app webviews and restored tabs. Soft signal.
-    try {
-      if (typeof window.outerWidth !== 'undefined' &&
-          window.outerWidth === 0 && window.outerHeight === 0) {
-        score += 0.15;
-        reasons.push("zero_outer_dimensions");
-      }
-    } catch {}
-
-    // Unrealistically small screen.
-    try {
-      if (typeof screen !== 'undefined' &&
-          (screen.width < 100 || screen.height < 100)) {
-        score += 0.4;
-        reasons.push("tiny_screen");
-      }
-    } catch {}
-
+    
     // WebGL software renderer — headless Chrome uses SwiftShader.
-    // Real GPUs never identify as software renderers.
     try {
       const canvas = document.createElement('canvas');
       const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -2240,28 +2187,91 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled, intensity) {
         if (dbg) {
           const renderer = (gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '').toLowerCase();
           if (/swiftshader|llvmpipe|virtualbox|vmware|mesa|softpipe/i.test(renderer)) {
-            score = Math.max(score, 0.88);
+            hardScore = Math.max(hardScore, 0.89);
             reasons.push("software_webgl_renderer");
           }
         }
       }
     } catch {}
 
-    // Platform/UA mismatch — scrapers hardcode "Macintosh" UA on non-Mac machines.
+    // --- 2. Medium Signals (Score >= 0.50) ---
+    let mediumScore = 0;
+    try {
+      if (typeof screen !== 'undefined' && (screen.width <= 100 || screen.height <= 100)) {
+        mediumScore = Math.max(mediumScore, 0.60);
+        reasons.push("tiny_screen");
+      }
+    } catch {}
+
     try {
       const claimedMac = /Macintosh/i.test(ua);
       const platformMac = /Mac/i.test(navigator.platform || '');
-      if (claimedMac && !platformMac && navigator.platform) {
-        score += 0.3;
+      if (claimedMac && !platformMac && navigator.platform && !/Win|Android|iPhone|iPad|iPod/i.test(navigator.platform)) {
+        mediumScore = Math.max(mediumScore, 0.55);
         reasons.push("platform_ua_mismatch");
       }
     } catch {}
 
+    if (!/chrome|crios|safari|firefox|edg|opr|mobile/i.test(lowerUa)) {
+      mediumScore = Math.max(mediumScore, 0.50);
+      reasons.push("non_browser_user_agent");
+    }
+
+    // --- 3. Soft Anomalies (Incremental, Capped) ---
+    if (Array.isArray(navigator.languages) && navigator.languages.length === 0) {
+      anomalyCount += 1.5;
+      reasons.push("empty_languages");
+    }
+
+    const chromeVerMatch = ua.match(/Chrome\/(\d+)\./);
+    if (chromeVerMatch) {
+      const chromeVer = parseInt(chromeVerMatch[1], 10);
+      if (chromeVer < 80) {
+        anomalyCount += 2;
+        reasons.push("stale_chrome_version");
+      } else if (chromeVer < 110) {
+        anomalyCount += 1;
+        reasons.push("stale_chrome_version");
+      }
+    }
+
+    if (/Chrome\//i.test(ua) && !lowerUa.includes('chromium')) {
+      if (typeof window.chrome === 'undefined' || window.chrome === null) {
+        anomalyCount += 1.5;
+        reasons.push("chrome_ua_no_chrome_obj");
+      }
+    }
+
+    try {
+      if (navigator.plugins && navigator.plugins.length === 0 &&
+          /Chrome|Safari/i.test(ua) && !/Mobile|Android|iPhone|iPad/i.test(ua)) {
+        anomalyCount += 0.5;
+        reasons.push("no_plugins");
+      }
+    } catch {}
+
+    try {
+      if (typeof window.outerWidth !== 'undefined' &&
+          window.outerWidth === 0 && window.outerHeight === 0) {
+        anomalyCount += 1;
+        reasons.push("zero_outer_dimensions");
+      }
+    } catch {}
+    
+    // Evaluate Final Score
+    // Soft anomalies act as a multiplier up to a strict cap to prevent false positive runaways.
+    const anomalyScore = Math.min(0.40, anomalyCount * 0.08); 
+    
+    // Combine scores. Hard score overrides everything. 
+    // Medium + Anomalies maxes out at ~0.85 (below High Confidence usually).
+    let score = hardScore > 0 ? hardScore : Math.min(0.85, mediumScore + anomalyScore);
+
     score = Math.min(1, score);
     const highConfidence = score >= highConfidenceThreshold;
     const mediumConfidence = score >= mediumConfidenceThreshold;
+    
     return {
-      isBot: mediumConfidence,
+      isBot: mediumConfidence || highConfidence,
       confidence: highConfidence ? "high" : mediumConfidence ? "medium" : "low",
       botScore: Number(score.toFixed(2)),
       reasons

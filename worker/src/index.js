@@ -2226,11 +2226,11 @@ function buildPixelGuardScript(shop, origin, reportOnly, enabled, intensity) {
     const chromeVerMatch = ua.match(/Chrome\/(\d+)\./);
     if (chromeVerMatch) {
       const chromeVer = parseInt(chromeVerMatch[1], 10);
-      if (chromeVer < 80) {
-        anomalyCount += 2;
+      if (chromeVer < 70) { // Significantly older Chrome
+        anomalyCount += 1.5;
         reasons.push("stale_chrome_version");
-      } else if (chromeVer < 110) {
-        anomalyCount += 1;
+      } else if (chromeVer < 90) { // Moderately older Chrome
+        anomalyCount += 0.5;
         reasons.push("stale_chrome_version");
       }
     }

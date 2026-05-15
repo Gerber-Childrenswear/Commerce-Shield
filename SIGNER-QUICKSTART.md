@@ -36,10 +36,11 @@
 **Fastest approach (single command):**
 
 ```powershell
-# Edit these three values first:
+# Edit these values first:
 $ProjectId = "YOUR_GOOGLE_CLOUD_PROJECT_ID"
 $Secret = "YOUR_BASE64_ENCODED_SECRET"  # Must match what you put in Wrangler
 $Region = "us-central1"
+$WorkerUrl = "https://<your-worker-origin>"
 
 # Then run:
 gcloud run deploy "commerce-shield-signer" `
@@ -47,7 +48,7 @@ gcloud run deploy "commerce-shield-signer" `
   --platform managed `
   --region $Region `
   --allow-unauthenticated `
-  --set-env-vars "EDGE_BOT_SHARED_SECRET=$Secret,WORKER_URL=https://commerce-shield-prod.ncassidy.workers.dev" `
+  --set-env-vars "EDGE_BOT_SHARED_SECRET=$Secret,WORKER_URL=$WorkerUrl" `
   --project $ProjectId
 ```
 
@@ -99,7 +100,7 @@ Or if `isBot: true` in body: `{"ok":true,"accepted":true}`
 
 ### 4. Verify in Commerce Shield Dashboard
 
-1. Go to `https://commerce-shield-prod.ncassidy.workers.dev` (or your configured Cloudflare Worker URL)
+1. Go to your configured Cloudflare Worker URL (for this repo currently `https://commerce-shield-prod.ncassidy.workers.dev`)
 2. **Dashboard** tab
 3. Look for "Bot Events (GTM Server)" row
 4. Should see counts increment when events fire

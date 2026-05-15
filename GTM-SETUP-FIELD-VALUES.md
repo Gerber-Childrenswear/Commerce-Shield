@@ -10,8 +10,8 @@
 ### Step 2: Basic Configuration
 
 **Field: Request URL** (top of tag form)
-- Type or paste: `https://commerce-shield-prod.ncassidy.workers.dev/api/integrations/edge-bot-event`
-- OR use variable picker → select `CS - Worker Endpoint`
+- Use variable picker → select `CS - Worker Endpoint`
+- OR type manually: `https://<your-worker-origin>/api/integrations/edge-bot-event`
 
 **Field: Request Method**
 - Choose: **POST**
@@ -49,7 +49,7 @@ Paste this JSON exactly:
 
 | GTM Field | Value |
 |-----------|-------|
-| **Request URL** | https://commerce-shield-prod.ncassidy.workers.dev/api/integrations/edge-bot-event |
+| **Request URL** | {{CS - Worker Endpoint}}/api/integrations/edge-bot-event |
 | **Request Method** | POST |
 | **Headers: Content-Type** | application/json |
 | **Trigger** | CS - Edge Bot Forwarder - Always |
@@ -70,7 +70,7 @@ GTM's built-in HTTP Request tag **cannot generate HMAC signatures**.
 
 ### Option A: Use Signer Service (Recommended)
 Deploy signer code to Cloud Run or your own server, then:
-1. Replace Request URL with: `https://your-signer-endpoint/sign?target=edge-bot-event`
+1. Replace Request URL with: `https://<your-signer-origin>/api/integrations/edge-bot-event`
 2. Signer adds headers + forwards to Worker
 
 ### Option B: Modify GTM Tag Type

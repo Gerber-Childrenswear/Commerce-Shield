@@ -39,7 +39,7 @@ gcloud run deploy $SERVICE_NAME \
   --region $REGION \
   --allow-unauthenticated \
   --set-env-vars "EDGE_BOT_SHARED_SECRET=your-base64-encoded-secret" \
-  --set-env-vars "WORKER_URL=https://commerce-shield-prod.ncassidy.workers.dev" \
+  --set-env-vars "WORKER_URL=https://<your-worker-origin>" \
   --project $PROJECT_ID
 ```
 
@@ -78,7 +78,7 @@ If you prefer a single command from your machine:
 $ProjectId = "your-google-cloud-project-id"
 $Region = "us-central1"
 $Secret = "your-base64-encoded-secret"
-$WorkerUrl = "https://commerce-shield-prod.ncassidy.workers.dev"
+$WorkerUrl = "https://<your-worker-origin>"
 
 gcloud run deploy "commerce-shield-signer" `
   --source ./signer `
@@ -111,7 +111,7 @@ Expected response:
 | Var | Required | Example |
 |-----|----------|---------|
 | `EDGE_BOT_SHARED_SECRET` | YES | Base64-encoded HMAC key |
-| `WORKER_URL` | NO (default shown) | https://commerce-shield-prod.ncassidy.workers.dev |
+| `WORKER_URL` | NO (default shown) | https://<your-worker-origin> |
 | `PORT` | NO (default 8080) | 8080 |
 
 ---

@@ -4,7 +4,7 @@
 
 This repository contains the Shopify admin app shell (Express + web UI) and the Cloudflare Worker project used for production.
 
-The deployed URL used by this app is:
+The deployed Worker origin for this environment is currently:
 
 - https://commerce-shield-prod.ncassidy.workers.dev
 

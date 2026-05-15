@@ -6,7 +6,7 @@ Embedded Shopify admin app for bot protection, discount config, MRI engine, and 
 
 - **Backend:** Express.js server (`server.js`) — port 4000
 - **Frontend:** React + Vite + TypeScript (`web/`)
-- **Deploy:** Cloudflare Workers at `https://commerce-shield-prod.ncassidy.workers.dev/`
+- **Deploy:** Cloudflare Workers at your configured Worker origin (current prod: `https://commerce-shield-prod.ncassidy.workers.dev/`)
 - **API Version:** Shopify Admin API 2025-10
 
 ## Features
@@ -57,8 +57,10 @@ The Worker source of truth now lives in this repo at:
 Commerce Shield enforces pixel suppression through the Worker-served storefront guard:
 
 ```html
-<script src="https://commerce-shield-prod.ncassidy.workers.dev/cs-pixel-guard.js?shop=gerberchildrenswear.myshopify.com"></script>
+<script src="https://<your-worker-origin>/cs-pixel-guard.js?shop=<your-shop>.myshopify.com"></script>
 ```
+
+Replace `<your-worker-origin>` with your deployed Worker/app origin (for this repo: `SHOPIFY_APP_URL`).
 
 Place this as high in the theme `<head>` as possible, before Meta/Google/TikTok/Pinterest/Snap/Bing/Reddit/Cloudflare analytics pixels. The guard fails open for normal shoppers and uncertain sessions. It only suppresses known marketing/analytics pixel calls when the browser is a high-confidence bot or automation session.
 
@@ -67,7 +69,7 @@ The embedded Commerce Shield admin includes an **Install Pixel Guard** button. I
 For a dry run that makes no suppression changes, use:
 
 ```html
-<script src="https://commerce-shield-prod.ncassidy.workers.dev/cs-pixel-guard.js?shop=gerberchildrenswear.myshopify.com&mode=report"></script>
+<script src="https://<your-worker-origin>/cs-pixel-guard.js?shop=<your-shop>.myshopify.com&mode=report"></script>
 ```
 
 ### Worker Commands
@@ -102,4 +104,4 @@ $env:CLOUDFLARE_WORKER_NAME = 'commerce-shield-prod' # optional
 
 1. Make and validate changes in this repository
 2. Deploy Worker from this repository with `npm run worker:deploy`
-3. Confirm Shopify app URLs in `shopify.app.toml` remain pointed to `commerce-shield-prod`
+3. Confirm Shopify app URLs in `shopify.app.toml` remain pointed to your configured Worker/app origin
